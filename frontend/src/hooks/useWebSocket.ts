@@ -7,23 +7,7 @@ import {
   AgentCompleteEvent,
 } from '../types/agent.types';
 
-// Determine WebSocket URL based on environment
-const getWebSocketUrl = () => {
-  // If VITE_WS_URL is set, use it
-  if (import.meta.env.VITE_WS_URL) {
-    return import.meta.env.VITE_WS_URL;
-  }
-
-  // In production (served via domain), use same origin
-  if (window.location.hostname !== 'localhost') {
-    return window.location.origin;
-  }
-
-  // In development, use localhost
-  return 'http://localhost:3000';
-};
-
-const WS_URL = getWebSocketUrl();
+// WebSocket URL determined at runtime, not module load time
 
 interface UseWebSocketReturn {
   socket: Socket | null;
@@ -50,7 +34,22 @@ export function useWebSocket(): UseWebSocketReturn {
 
   // Initialize socket connection
   useEffect(() => {
-    const newSocket = io(WS_URL, {
+    // Determine WebSocket URL at runtime
+    let wsUrl: string;
+
+    if (import.meta.env.VITE_WS_URL) {
+      wsUrl = import.meta.env.VITE_WS_URL;
+    } else if (window.location.hostname !== 'localhost') {
+      // Production: use same origin (https://agents.petter.ai)
+      wsUrl = window.location.origin;
+    } else {
+      // Development: use localhost
+      wsUrl = 'http://localhost:3000';
+    }
+
+    console.log('Connecting WebSocket to:', wsUrl);
+
+    const newSocket = io(wsUrl, {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionDelay: 1000,

@@ -1,22 +1,20 @@
 import { Agent, LaunchAgentRequest, LaunchAgentResponse } from '../types/agent.types';
 
-// Use relative URLs in production, absolute in development
-const getApiBaseUrl = () => {
+// Determine API base URL at runtime
+const getApiBaseUrl = (): string => {
   // If VITE_API_BASE_URL is set, use it
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
 
-  // In production (served via domain), use relative URLs
-  if (window.location.hostname !== 'localhost') {
+  // Check if we're in production (not localhost)
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
     return window.location.origin + '/api';
   }
 
   // In development, use localhost
   return 'http://localhost:3000/api';
 };
-
-const API_BASE_URL = getApiBaseUrl();
 
 /**
  * API Service
@@ -27,7 +25,8 @@ export class ApiService {
    * Launch a new agent
    */
   static async launchAgent(request: LaunchAgentRequest): Promise<LaunchAgentResponse> {
-    const response = await fetch(`${API_BASE_URL}/agents`, {
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -47,7 +46,8 @@ export class ApiService {
    * Get all agents
    */
   static async getAllAgents(): Promise<Agent[]> {
-    const response = await fetch(`${API_BASE_URL}/agents`);
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents`);
 
     if (!response.ok) {
       throw new Error('Failed to fetch agents');
@@ -60,7 +60,8 @@ export class ApiService {
    * Get active (running) agents
    */
   static async getActiveAgents(): Promise<Agent[]> {
-    const response = await fetch(`${API_BASE_URL}/agents/active`);
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/active`);
 
     if (!response.ok) {
       throw new Error('Failed to fetch active agents');
@@ -73,7 +74,8 @@ export class ApiService {
    * Get specific agent by ID
    */
   static async getAgent(id: string): Promise<Agent> {
-    const response = await fetch(`${API_BASE_URL}/agents/${id}`);
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/${id}`);
 
     if (!response.ok) {
       if (response.status === 404) {
@@ -89,7 +91,8 @@ export class ApiService {
    * Terminate an agent
    */
   static async terminateAgent(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/agents/${id}`, {
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/${id}`, {
       method: 'DELETE',
     });
 
@@ -102,7 +105,8 @@ export class ApiService {
    * Get agent status
    */
   static async getAgentStatus(id: string): Promise<{ agentId: string; status: string }> {
-    const response = await fetch(`${API_BASE_URL}/agents/${id}/status`);
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/${id}/status`);
 
     if (!response.ok) {
       throw new Error('Failed to fetch agent status');
