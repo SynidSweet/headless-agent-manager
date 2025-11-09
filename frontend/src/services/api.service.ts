@@ -1,6 +1,22 @@
 import { Agent, LaunchAgentRequest, LaunchAgentResponse } from '../types/agent.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+// Use relative URLs in production, absolute in development
+const getApiBaseUrl = () => {
+  // If VITE_API_BASE_URL is set, use it
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
+  // In production (served via domain), use relative URLs
+  if (window.location.hostname !== 'localhost') {
+    return window.location.origin + '/api';
+  }
+
+  // In development, use localhost
+  return 'http://localhost:3000/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 /**
  * API Service

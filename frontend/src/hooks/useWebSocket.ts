@@ -7,7 +7,23 @@ import {
   AgentCompleteEvent,
 } from '../types/agent.types';
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+// Determine WebSocket URL based on environment
+const getWebSocketUrl = () => {
+  // If VITE_WS_URL is set, use it
+  if (import.meta.env.VITE_WS_URL) {
+    return import.meta.env.VITE_WS_URL;
+  }
+
+  // In production (served via domain), use same origin
+  if (window.location.hostname !== 'localhost') {
+    return window.location.origin;
+  }
+
+  // In development, use localhost
+  return 'http://localhost:3000';
+};
+
+const WS_URL = getWebSocketUrl();
 
 interface UseWebSocketReturn {
   socket: Socket | null;
