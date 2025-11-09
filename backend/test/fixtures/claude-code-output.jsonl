@@ -1,0 +1,6 @@
+{"type":"system","role":"init","content":"Session started","session_id":"test-session-123"}
+{"type":"user","content":"Create a function to calculate fibonacci numbers"}
+{"type":"assistant","content":"I'll help you create a fibonacci function. Let me start by creating a new file."}
+{"type":"assistant","content":"```typescript\nfunction fibonacci(n: number): number {\n  if (n <= 1) return n;\n  return fibonacci(n - 1) + fibonacci(n - 2);\n}\n```"}
+{"type":"assistant","content":"I've created a basic recursive fibonacci function. Would you like me to add memoization for better performance?"}
+{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78},"api_calls":3}}
