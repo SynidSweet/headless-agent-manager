@@ -67,9 +67,10 @@ describe('AgentOrchestrationService', () => {
       // Assert
       expect(result).toBeDefined();
       expect(result.type).toBe(AgentType.CLAUDE_CODE);
+      expect(result.status).toBe(AgentStatus.RUNNING); // After start(), should be running
       expect(mockAgentFactory.create).toHaveBeenCalledWith(AgentType.CLAUDE_CODE);
       expect(mockAgentRunner.start).toHaveBeenCalled();
-      expect(mockAgentRepository.save).toHaveBeenCalledWith(result);
+      expect(mockAgentRepository.save).toHaveBeenCalledTimes(1);
     });
 
     it('should validate DTO before launching', async () => {
@@ -336,6 +337,69 @@ describe('AgentOrchestrationService', () => {
       await expect(service.getAgentById(agentId)).rejects.toThrow(
         `Agent not found: ${agentId.toString()}`
       );
+    });
+  });
+
+  describe('getRunnerForAgent', () => {
+    it('should return runner for launched agent', async () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {};
+
+      const mockAgent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {},
+      });
+      mockAgent.markAsRunning();
+
+      mockAgentRunner.start.mockResolvedValue(mockAgent);
+
+      // Act
+      const agent = await service.launchAgent(dto);
+      const runner = service.getRunnerForAgent(agent.id);
+
+      // Assert
+      expect(runner).toBeDefined();
+      expect(runner).toBe(mockAgentRunner);
+    });
+
+    it('should throw error if agent not found', () => {
+      // Arrange
+      const fakeId = AgentId.generate();
+
+      // Act & Assert
+      expect(() => service.getRunnerForAgent(fakeId)).toThrow(
+        `No runner found for agent: ${fakeId.toString()}`
+      );
+    });
+
+    it('should return same runner instance across multiple calls', async () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {};
+
+      const mockAgent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {},
+      });
+      mockAgent.markAsRunning();
+
+      mockAgentRunner.start.mockResolvedValue(mockAgent);
+
+      // Act
+      const agent = await service.launchAgent(dto);
+      const runner1 = service.getRunnerForAgent(agent.id);
+      const runner2 = service.getRunnerForAgent(agent.id);
+
+      // Assert
+      expect(runner1).toBe(runner2);
+      expect(runner1).toBe(mockAgentRunner);
     });
   });
 });

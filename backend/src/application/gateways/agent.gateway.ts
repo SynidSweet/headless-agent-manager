@@ -13,7 +13,6 @@ import { StreamingService } from '../services/streaming.service';
 import { AgentOrchestrationService } from '../services/agent-orchestration.service';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { IWebSocketGateway, WebSocketClient } from '../ports/websocket-gateway.port';
-import { IAgentFactory } from '../ports/agent-factory.port';
 
 /**
  * Agent WebSocket Gateway
@@ -38,8 +37,7 @@ export class AgentGateway
   constructor(
     @Inject(forwardRef(() => StreamingService))
     private readonly streamingService: StreamingService,
-    private readonly orchestrationService: AgentOrchestrationService,
-    @Inject('IAgentFactory') private readonly agentFactory: IAgentFactory
+    private readonly orchestrationService: AgentOrchestrationService
   ) {}
 
   /**
@@ -89,11 +87,8 @@ export class AgentGateway
     try {
       const agentId = AgentId.fromString(data.agentId);
 
-      // Get agent to determine runner type
-      const agent = await this.orchestrationService.getAgentById(agentId);
-
-      // Get appropriate runner
-      const runner = this.agentFactory.create(agent.type);
+      // Get the ACTUAL runner that's running this agent (not a new instance)
+      const runner = this.orchestrationService.getRunnerForAgent(agentId);
 
       // Subscribe to agent events
       this.streamingService.subscribeToAgent(agentId, client.id, runner);

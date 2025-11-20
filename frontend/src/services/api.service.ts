@@ -1,4 +1,4 @@
-import { Agent, LaunchAgentRequest, LaunchAgentResponse } from '../types/agent.types';
+import type { Agent, LaunchAgentRequest, LaunchAgentResponse, AgentMessage } from '../types/agent.types';
 
 // Determine API base URL at runtime
 const getApiBaseUrl = (): string => {
@@ -110,6 +110,42 @@ export class ApiService {
 
     if (!response.ok) {
       throw new Error('Failed to fetch agent status');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get all messages for an agent
+   * Returns messages sorted by sequence number in ascending order
+   */
+  static async getAgentMessages(agentId: string): Promise<AgentMessage[]> {
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/${agentId}/messages`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Agent not found');
+      }
+      throw new Error('Failed to fetch agent messages');
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get messages for an agent since a specific sequence number
+   * Used for gap filling when WebSocket reconnects
+   */
+  static async getAgentMessagesSince(agentId: string, since: number): Promise<AgentMessage[]> {
+    const apiUrl = getApiBaseUrl();
+    const response = await fetch(`${apiUrl}/agents/${agentId}/messages?since=${since}`);
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error('Agent not found');
+      }
+      throw new Error('Failed to fetch agent messages');
     }
 
     return response.json();

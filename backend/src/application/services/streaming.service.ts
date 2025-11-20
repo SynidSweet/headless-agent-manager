@@ -8,6 +8,7 @@ import {
   AgentMessage,
   AgentResult,
 } from '@application/ports/agent-runner.port';
+import { AgentMessageService } from './agent-message.service';
 
 /**
  * Agent Subscription Tracking
@@ -31,7 +32,8 @@ export class StreamingService {
   private clientSubscriptions: Map<string, Set<string>> = new Map();
 
   constructor(
-    @Inject('IWebSocketGateway') private readonly websocketGateway: IWebSocketGateway
+    @Inject('IWebSocketGateway') private readonly websocketGateway: IWebSocketGateway,
+    private readonly messageService: AgentMessageService
   ) {}
 
   /**
@@ -129,27 +131,101 @@ export class StreamingService {
 
   /**
    * Broadcast agent message to all subscribed clients
+   * CRITICAL: Tries to save to database, but ALWAYS emits to WebSocket (even if DB fails)
+   * This ensures messages reach the frontend even if persistence fails
    * @param agentId - The agent ID
    * @param message - The message to broadcast
    */
-  broadcastMessage(agentId: AgentId, message: AgentMessage): void {
+  async broadcastMessage(agentId: AgentId, message: AgentMessage): Promise<void> {
+    console.log('[TRACE] broadcastMessage START', { agentId: agentId.toString(), messageType: message.type });
+
+    let messageToSend: any;
+    let dbError: Error | null = null;
+
+    // 1. TRY to save to database (source of truth, but not required for real-time display)
+    try {
+      console.log('[TRACE] Attempting DB save...');
+      const savedMessage = await this.messageService.saveMessage({
+        agentId: agentId.toString(),
+        type: message.type as 'user' | 'assistant' | 'system' | 'error',
+        role: message.role,
+        content: message.content,
+        metadata: message.metadata,
+      });
+      console.log('[TRACE] DB save SUCCESS', { messageId: savedMessage.id });
+      messageToSend = savedMessage;
+    } catch (error) {
+      // Database save failed - log error but continue with emission
+      console.error('Failed to save message to database:', error);
+      console.log('[TRACE] DB save FAILED, generating temporary message with ID');
+      dbError = error as Error;
+
+      // Generate temporary message with required fields for frontend
+      // Frontend expects id and sequenceNumber for deduplication/ordering
+      messageToSend = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`, // Temporary ID
+        agentId: agentId.toString(),
+        sequenceNumber: -1, // -1 indicates non-persisted message
+        type: message.type,
+        role: message.role,
+        content: message.content,
+        metadata: message.metadata,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    // 2. ALWAYS emit WebSocket event (critical for real-time UX)
+    console.log('[TRACE] Emitting agent:message to WebSocket...', { room: `agent:${agentId.toString()}` });
     this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:message', {
       agentId: agentId.toString(),
+      message: messageToSend,
       timestamp: new Date().toISOString(),
-      message,
     });
+    console.log('[TRACE] WebSocket emission COMPLETE');
+
+    // 3. If DB save failed, emit error event to notify frontend
+    if (dbError) {
+      console.log('[TRACE] Emitting agent:error due to DB failure');
+      this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
+        agentId: agentId.toString(),
+        error: {
+          message: `Message persistence failed: ${dbError.message}`,
+          name: dbError.name,
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    console.log('[TRACE] broadcastMessage END');
   }
 
   /**
    * Broadcast status change to all subscribed clients
    * @param agentId - The agent ID
    * @param status - The new status
+   *
+   * EVENT-DRIVEN: Emits two events:
+   * 1. 'agent:status' to room (for clients subscribed to this agent)
+   * 2. 'agent:updated' to ALL clients (for global agent list updates)
    */
   broadcastStatusChange(agentId: AgentId, status: AgentStatus): void {
-    this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:status', {
-      agentId: agentId.toString(),
-      status: status.toString(),
-      timestamp: new Date().toISOString(),
+    const agentIdStr = agentId.toString();
+    const statusStr = status.toString();
+    const timestamp = new Date().toISOString();
+
+    // Emit to room (subscribed clients get detailed status event)
+    this.websocketGateway.emitToRoom(`agent:${agentIdStr}`, 'agent:status', {
+      agentId: agentIdStr,
+      status: statusStr,
+      timestamp,
+    });
+
+    // EVENT-DRIVEN: Emit to ALL clients (for global agent list updates)
+    // This ensures all frontends see status changes in their agent lists
+    this.websocketGateway.emitToAll('agent:updated', {
+      agentId: agentIdStr,
+      status: statusStr,
+      timestamp,
     });
   }
 
@@ -190,7 +266,10 @@ export class StreamingService {
   private createObserver(agentId: AgentId): IAgentObserver {
     return {
       onMessage: (message: AgentMessage) => {
-        this.broadcastMessage(agentId, message);
+        // Fire and forget - errors are logged but don't block the observer
+        this.broadcastMessage(agentId, message).catch(error => {
+          console.error('Failed to broadcast message:', error);
+        });
       },
       onStatusChange: (status: AgentStatus) => {
         this.broadcastStatusChange(agentId, status);

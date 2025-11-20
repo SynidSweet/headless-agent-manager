@@ -1,4 +1,5 @@
 import { StreamingService } from '@application/services/streaming.service';
+import { AgentMessageService } from '@application/services/agent-message.service';
 import { IWebSocketGateway } from '@application/ports/websocket-gateway.port';
 import { IAgentRunner, AgentMessage, AgentResult } from '@application/ports/agent-runner.port';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
@@ -7,6 +8,7 @@ import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 describe('StreamingService', () => {
   let service: StreamingService;
   let mockWebSocketGateway: jest.Mocked<IWebSocketGateway>;
+  let mockMessageService: jest.Mocked<AgentMessageService>;
   let mockAgentRunner: jest.Mocked<IAgentRunner>;
 
   beforeEach(() => {
@@ -21,6 +23,20 @@ describe('StreamingService', () => {
       isClientConnected: jest.fn(),
     };
 
+    // Create mock message service
+    mockMessageService = {
+      saveMessage: jest.fn().mockResolvedValue({
+        id: 'msg-uuid',
+        agentId: 'agent-123',
+        sequenceNumber: 1,
+        type: 'assistant',
+        content: 'test',
+        createdAt: new Date().toISOString(),
+      }),
+      findByAgentId: jest.fn(),
+      findByAgentIdSince: jest.fn(),
+    } as any;
+
     // Create mock agent runner
     mockAgentRunner = {
       start: jest.fn(),
@@ -31,7 +47,7 @@ describe('StreamingService', () => {
     };
 
     // Create service with mocks
-    service = new StreamingService(mockWebSocketGateway);
+    service = new StreamingService(mockWebSocketGateway, mockMessageService);
   });
 
   describe('subscribeToAgent', () => {
@@ -151,7 +167,7 @@ describe('StreamingService', () => {
   });
 
   describe('broadcastMessage', () => {
-    it('should emit agent message to room', () => {
+    it('should emit agent message to room', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const message: AgentMessage = {
@@ -160,21 +176,25 @@ describe('StreamingService', () => {
       };
 
       // Act
-      service.broadcastMessage(agentId, message);
+      await service.broadcastMessage(agentId, message);
 
       // Assert
+      expect(mockMessageService.saveMessage).toHaveBeenCalled();
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
         `agent:${agentId.toString()}`,
         'agent:message',
-        {
+        expect.objectContaining({
           agentId: agentId.toString(),
           timestamp: expect.any(String),
-          message,
-        }
+          message: expect.objectContaining({
+            id: 'msg-uuid',
+            sequenceNumber: 1,
+          }),
+        })
       );
     });
 
-    it('should include timestamp in ISO format', () => {
+    it('should include timestamp in ISO format', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const message: AgentMessage = {
@@ -183,12 +203,69 @@ describe('StreamingService', () => {
       };
 
       // Act
-      service.broadcastMessage(agentId, message);
+      await service.broadcastMessage(agentId, message);
 
       // Assert
       const call = mockWebSocketGateway.emitToRoom.mock.calls[0]!;
       const data = call[2] as any;
       expect(data.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    it('should still emit message to WebSocket when database save fails', async () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const message: AgentMessage = {
+        type: 'assistant',
+        content: 'Test message',
+      };
+
+      // Simulate database failure (FK constraint, etc.)
+      const dbError = new Error('FOREIGN KEY constraint failed');
+      mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
+
+      // Act
+      await service.broadcastMessage(agentId, message);
+
+      // Assert - Message should still be emitted to WebSocket
+      expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
+        `agent:${agentId.toString()}`,
+        'agent:message',
+        expect.objectContaining({
+          agentId: agentId.toString(),
+          message: expect.objectContaining({
+            type: 'assistant',
+            content: 'Test message',
+          }),
+        })
+      );
+    });
+
+    it('should emit error event when database save fails', async () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const message: AgentMessage = {
+        type: 'assistant',
+        content: 'Test message',
+      };
+
+      const dbError = new Error('Database write failed');
+      mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
+
+      // Act
+      await service.broadcastMessage(agentId, message);
+
+      // Assert - Error should be emitted to client
+      expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
+        `agent:${agentId.toString()}`,
+        'agent:error',
+        expect.objectContaining({
+          agentId: agentId.toString(),
+          error: expect.objectContaining({
+            message: expect.stringContaining('Database write failed'),
+            name: 'Error',
+          }),
+        })
+      );
     });
   });
 
@@ -266,7 +343,7 @@ describe('StreamingService', () => {
   });
 
   describe('observer integration', () => {
-    it('should broadcast message when observer receives message', () => {
+    it('should broadcast message when observer receives message', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const clientId = 'client-1';
@@ -282,12 +359,19 @@ describe('StreamingService', () => {
       // Act
       observer.onMessage(message);
 
+      // Wait for async broadcast to complete
+      await new Promise(resolve => setImmediate(resolve));
+
       // Assert
+      expect(mockMessageService.saveMessage).toHaveBeenCalled();
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
         `agent:${agentId.toString()}`,
         'agent:message',
         expect.objectContaining({
-          message,
+          message: expect.objectContaining({
+            id: 'msg-uuid',
+            sequenceNumber: 1,
+          }),
         })
       );
     });

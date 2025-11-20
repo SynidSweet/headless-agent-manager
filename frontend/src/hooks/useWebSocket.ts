@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import {
+import type {
   AgentMessageEvent,
   AgentStatusEvent,
   AgentErrorEvent,
@@ -73,6 +73,10 @@ export function useWebSocket(): UseWebSocketReturn {
     // Setup event listeners with callbacks
     newSocket.on('agent:message', (event: AgentMessageEvent) => {
       console.log('Agent message received:', event);
+
+      // Dispatch browser custom event for useAgentMessages hook
+      window.dispatchEvent(new CustomEvent('agent:message', { detail: event }));
+
       if (messageCallbackRef.current) {
         messageCallbackRef.current(event);
       }

@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { AgentType, LaunchAgentRequest } from '../types/agent.types';
-import { ApiService } from '../services/api.service';
+import { useDispatch } from 'react-redux';
+import type { AgentType, LaunchAgentRequest } from '@headless-agent-manager/client';
+import { actions } from '../store/store';
+import type { AppDispatch } from '../store/store';
+import { useDesignTokens } from '../hooks/useDesignTokens';
 
 interface AgentLaunchFormProps {
   onAgentLaunched: () => void;
 }
 
 export function AgentLaunchForm({ onAgentLaunched }: AgentLaunchFormProps) {
+  const tokens = useDesignTokens();
+  const dispatch = useDispatch<AppDispatch>();
   const [type, setType] = useState<AgentType>('claude-code');
   const [prompt, setPrompt] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
@@ -32,7 +37,7 @@ export function AgentLaunchForm({ onAgentLaunched }: AgentLaunchFormProps) {
         },
       };
 
-      await ApiService.launchAgent(request);
+      await dispatch(actions.launchAgent(request)).unwrap();
       setPrompt('');
       onAgentLaunched();
     } catch (err) {
@@ -43,98 +48,135 @@ export function AgentLaunchForm({ onAgentLaunched }: AgentLaunchFormProps) {
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Launch New Agent</h2>
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Agent Type:</label>
+    <div
+      style={{
+        padding: tokens.spacing.lg,
+        backgroundColor: tokens.colors.background,
+        borderRadius: tokens.borderRadius.md,
+        boxShadow: tokens.shadows.md,
+      }}
+    >
+      <h2
+        style={{
+          margin: `0 0 ${tokens.spacing.lg} 0`,
+          fontSize: tokens.typography.fontSize.xl,
+          fontWeight: 'bold',
+          color: tokens.colors.text,
+        }}
+      >
+        Launch New Agent
+      </h2>
+      <form
+        onSubmit={handleSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: tokens.spacing.md,
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.sm,
+          }}
+        >
+          <label
+            htmlFor="agent-type"
+            style={{
+              fontWeight: '600',
+              fontSize: tokens.typography.fontSize.md,
+              color: tokens.colors.text,
+            }}
+          >
+            Agent Type:
+          </label>
           <select
+            id="agent-type"
             value={type}
             onChange={(e) => setType(e.target.value as AgentType)}
-            style={styles.select}
+            style={{
+              padding: tokens.spacing.sm,
+              fontSize: tokens.typography.fontSize.md,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.border}`,
+              backgroundColor: tokens.colors.background,
+              color: tokens.colors.text,
+            }}
           >
             <option value="claude-code">Claude Code</option>
             <option value="gemini-cli">Gemini CLI</option>
           </select>
         </div>
 
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Prompt:</label>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.sm,
+          }}
+        >
+          <label
+            htmlFor="agent-prompt"
+            style={{
+              fontWeight: '600',
+              fontSize: tokens.typography.fontSize.md,
+              color: tokens.colors.text,
+            }}
+          >
+            Prompt:
+          </label>
           <textarea
+            id="agent-prompt"
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Enter your prompt for the agent..."
             rows={4}
-            style={styles.textarea}
+            style={{
+              padding: tokens.spacing.sm,
+              fontSize: tokens.typography.fontSize.md,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.border}`,
+              fontFamily: tokens.typography.fontFamilyMono,
+              resize: 'vertical',
+              backgroundColor: tokens.colors.background,
+              color: tokens.colors.text,
+            }}
             disabled={isLaunching}
           />
         </div>
 
-        {error && <div style={styles.error}>{error}</div>}
+        {error && (
+          <div
+            style={{
+              padding: tokens.spacing.md,
+              backgroundColor: '#ffebee',
+              color: tokens.colors.danger,
+              borderRadius: tokens.borderRadius.sm,
+              fontSize: tokens.typography.fontSize.md,
+            }}
+          >
+            {error}
+          </div>
+        )}
 
-        <button type="submit" disabled={isLaunching} style={styles.button}>
+        <button
+          type="submit"
+          disabled={isLaunching}
+          style={{
+            padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
+            fontSize: tokens.typography.fontSize.lg,
+            fontWeight: 'bold',
+            backgroundColor: isLaunching ? tokens.colors.textSecondary : tokens.colors.primary,
+            color: tokens.colors.textInverse,
+            border: 'none',
+            borderRadius: tokens.borderRadius.sm,
+            cursor: isLaunching ? 'not-allowed' : 'pointer',
+          }}
+        >
           {isLaunching ? 'Launching...' : 'Launch Agent'}
         </button>
       </form>
     </div>
   );
 }
-
-const styles = {
-  container: {
-    padding: '20px',
-    backgroundColor: '#f5f5f5',
-    borderRadius: '8px',
-    marginBottom: '20px',
-  },
-  title: {
-    margin: '0 0 20px 0',
-    fontSize: '20px',
-    fontWeight: 'bold',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '15px',
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-  },
-  label: {
-    fontWeight: '600',
-    fontSize: '14px',
-  },
-  select: {
-    padding: '8px',
-    fontSize: '14px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-  },
-  textarea: {
-    padding: '8px',
-    fontSize: '14px',
-    borderRadius: '4px',
-    border: '1px solid #ccc',
-    fontFamily: 'monospace',
-    resize: 'vertical' as const,
-  },
-  button: {
-    padding: '10px 20px',
-    fontSize: '16px',
-    fontWeight: 'bold',
-    backgroundColor: '#007bff',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  error: {
-    padding: '10px',
-    backgroundColor: '#fee',
-    color: '#c00',
-    borderRadius: '4px',
-    fontSize: '14px',
-  },
-};

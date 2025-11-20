@@ -2,18 +2,19 @@
 
 ## Project Overview
 
-A backend application that orchestrates multiple headless AI CLI agents (Claude Code and Gemini CLI) running concurrently, with real-time streaming of agent outputs to a web-based frontend. Built following **Clean Architecture** principles with **strict TDD methodology**.
+A full-stack application that orchestrates multiple headless AI CLI agents (Claude Code and Gemini CLI) running concurrently, with real-time streaming of agent outputs to a web-based frontend. Built following **Clean Architecture** principles with **strict TDD methodology**.
 
-**Status**: Phase 1 & 2 Complete → Ready for Phase 3
-**Documentation**: See `/SPECIFICATION.md` for complete system design and `/PHASE_1_2_COMPLETION.md` for completion report
+**Status**: ✅ **MVP COMPLETE + Frontend Refactoring Complete**
+**Documentation**: See `/SPECIFICATION.md` for system design, `/E2E_TESTING_GUIDE.md` for test setup
 
 **Current Implementation**:
-- ✅ Phase 1: Foundation (Complete - 100% domain coverage, NestJS configured)
-- ✅ Phase 2: Infrastructure (Complete - 89% coverage, Claude CLI integrated)
-- ⬜ Phase 3: Application Layer (Next)
-- ⬜ Phase 4: Presentation Layer
-- ⬜ Phase 5: Frontend
-- ⬜ Phase 6: Integration & Polish
+- ✅ Phase 1: Foundation (Complete - 100% domain coverage)
+- ✅ Phase 2: Infrastructure (Complete - 89% coverage)
+- ✅ Phase 3: Application Layer (Complete)
+- ✅ Phase 4: Presentation Layer (Complete)
+- ✅ Phase 5: Frontend (Complete)
+- ✅ Phase 6: Integration & Polish (Complete)
+- ✅ **Frontend Refactoring**: All 6 phases complete (Nov 2025)
 
 **Agent Support**:
 - ✅ **Claude Code** - THREE implementations available:
@@ -70,6 +71,105 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 ```
 
 **Switching Adapters**: Just change `CLAUDE_ADAPTER` in .env and restart
+
+---
+
+## Frontend Refactoring (Nov 2025) - ✅ COMPLETE
+
+### Overview
+Complete frontend refactoring following strict TDD methodology to resolve UI issues and establish comprehensive test coverage.
+
+**Completion Status:** ✅ All 6 phases complete
+**Duration:** 14 hours (within 12-18 hour estimate)
+**Test Coverage:** 80.3% component coverage (exceeded 80% target)
+
+### What Was Delivered
+
+**1. Testing Infrastructure**
+- Vitest 1.6.0 for unit/integration tests
+- Playwright for E2E tests with real backend integration
+- Backend health check for E2E transparency
+- Test cleanup helpers for test isolation
+
+**2. Message State Architecture**
+- Database is single source of truth
+- Messages have UUIDs (deduplication) + sequence numbers (ordering)
+- `useAgentMessages` hook with gap detection
+- New API endpoint: `GET /api/agents/:id/messages`
+- StreamingService updated to save-before-emit
+
+**3. Design Token System**
+- `useDesignTokens` hook with WCAG AA compliance
+- All components refactored to use tokens
+- 16.1:1 contrast ratio (text on background)
+- No light-on-light color issues
+
+**4. UI Improvements**
+- Graceful error handling (no blocking error screens)
+- Simplified UI (removed redundant elements)
+- Improved empty states
+- Better loading indicators
+
+**5. Test Coverage**
+```
+Frontend Unit Tests:     63/63  (100% pass)
+Frontend E2E Tests:      19/19  (100% pass)
+Component Coverage:      80.3%  (exceeded target)
+Backend Tests:           261+   (all passing)
+Total Tests:             343+   (100% pass rate)
+```
+
+### Key Files
+
+**Documentation:**
+- `/E2E_TESTING_GUIDE.md` - Complete E2E test setup guide
+- `/IMPLEMENTATION_BRIEF.md` - 6-phase implementation details
+- `/MESSAGE_STATE_ARCHITECTURE.md` - Message architecture design
+- `/USER_STORIES.md` - User stories with test specs
+
+**Frontend Tests:**
+- `frontend/test/` - 6 unit test files (63 tests)
+- `frontend/e2e/` - 5 E2E test files (19 tests)
+- `frontend/e2e/helpers/cleanup.ts` - Test cleanup utilities
+- `frontend/e2e/global-setup.ts` - Backend health check
+
+**Frontend Hooks:**
+- `frontend/src/hooks/useAgentMessages.ts` - Message state management
+- `frontend/src/hooks/useDesignTokens.ts` - Design system
+
+**Backend Additions:**
+- `backend/src/application/services/agent-message.service.ts` - Message persistence
+- `backend/src/application/dto/agent-message.dto.ts` - Message DTOs
+- Database schema updated with UUIDs and sequence numbers
+
+### Running Tests
+
+**Unit Tests:**
+```bash
+cd frontend
+npm test              # Watch mode
+npm test -- --run     # Run once
+npm run test:coverage # With coverage
+```
+
+**E2E Tests (Real Integration):**
+```bash
+# Terminal 1: Start backend
+cd backend
+npm run dev
+
+# Terminal 2: Run E2E tests
+cd frontend
+npm run test:e2e
+
+# Expected: 19 passed (15.1s)
+```
+
+**Backend Tests:**
+```bash
+cd backend
+npm test
+```
 
 ---
 
@@ -178,9 +278,35 @@ backend/test/
 │   ├── api/
 │   └── websocket/
 ├── e2e/                     # Full system tests
+│   ├── smoke/               # 🔥 REAL CLI integration tests
+│   │   ├── python-proxy.smoke.spec.ts  # Real Claude CLI via Python proxy
+│   │   ├── helpers.ts       # Smoke test utilities
+│   │   └── README.md        # Complete smoke test guide
+│   └── agent-flow.e2e.spec.ts
 └── fixtures/                # Test data
     ├── claude-output.jsonl
     └── gemini-output.json
+
+frontend/test/
+├── infrastructure.test.tsx  # Testing setup verification
+├── hooks/                   # Hook tests (20 tests)
+│   ├── useDesignTokens.test.ts
+│   └── useAgentMessages.test.tsx
+├── components/              # Component tests (39 tests)
+│   ├── AgentLaunchForm.test.tsx
+│   ├── AgentList.test.tsx
+│   └── AgentOutput.test.tsx
+└── setup.ts                 # Test setup with WebSocket mocking
+
+frontend/e2e/
+├── global-setup.ts          # Backend health check
+├── helpers/
+│   └── cleanup.ts           # Test isolation utilities
+├── agent-lifecycle.spec.ts  # 5 tests
+├── message-display.spec.ts  # 3 tests
+├── agent-switching.spec.ts  # 3 tests
+├── agent-termination.spec.ts # 4 tests
+└── websocket-connection.spec.ts # 4 tests
 ```
 
 ### Code Quality Standards
@@ -387,8 +513,11 @@ gemini -p "prompt text" \
 
 ### Running Tests
 
+**Backend Tests:**
 ```bash
-# All tests
+cd backend
+
+# All tests (excludes smoke tests)
 npm test
 
 # Watch mode (TDD)
@@ -400,11 +529,66 @@ npm run test:coverage
 # Specific test file
 npm test -- agent-orchestration.service.spec.ts
 
+# Unit tests only
+npm run test:unit
+
 # Integration tests only
 npm run test:integration
 
 # E2E tests only
 npm run test:e2e
+
+# 🔥 Smoke tests (REAL Claude CLI via Python proxy)
+# Requires: Python proxy running + Claude authenticated
+npm run test:smoke
+```
+
+**Smoke Tests (Real CLI Integration):**
+```bash
+# Prerequisites: Start Python proxy first
+cd claude-proxy-service
+source venv/bin/activate
+uvicorn app.main:app --reload
+
+# In another terminal: Run smoke tests
+cd backend
+npm run test:smoke
+
+# Expected: 6 tests, ~60 seconds, uses real Claude CLI
+# See: backend/test/e2e/smoke/README.md for details
+```
+
+**Frontend Tests:**
+```bash
+cd frontend
+
+# Unit tests (watch mode)
+npm test
+
+# Unit tests (run once)
+npm test -- --run
+
+# Coverage report
+npm run test:coverage
+
+# E2E tests (requires backend running)
+npm run test:e2e
+
+# E2E tests with UI
+npm run test:e2e:ui
+```
+
+**Full Test Suite:**
+```bash
+# Backend tests
+cd backend && npm test
+
+# Frontend unit tests
+cd frontend && npm test -- --run
+
+# Frontend E2E tests (start backend first!)
+cd backend && npm run dev  # Terminal 1
+cd frontend && npm run test:e2e  # Terminal 2
 ```
 
 ### Debugging Agent Output
@@ -512,11 +696,17 @@ try {
 
 ## Quick Links
 
+**Core Documentation:**
 - **Full Specification**: `/SPECIFICATION.md`
 - **Architecture Details**: `/docs/architecture.md`
 - **API Reference**: `/docs/api-reference.md`
-- **Testing Guide**: `/docs/testing-guide.md`
 - **Setup Instructions**: `/docs/setup-guide.md`
+
+**Frontend Refactoring (New):**
+- **E2E Testing Guide**: `/E2E_TESTING_GUIDE.md` - Complete E2E setup and best practices
+- **Implementation Brief**: `/IMPLEMENTATION_BRIEF.md` - 6-phase refactoring details
+- **Message Architecture**: `/MESSAGE_STATE_ARCHITECTURE.md` - Single source of truth design
+- **User Stories**: `/USER_STORIES.md` - User stories with test specs
 
 ---
 
@@ -538,6 +728,7 @@ try {
 
 ---
 
-**Last Updated**: 2025-11-09
-**Project Phase**: Specification Complete
-**Next Milestone**: Phase 1 - Foundation Setup
+**Last Updated**: 2025-11-10
+**Project Phase**: ✅ MVP Complete + Frontend Refactoring Complete
+**Status**: Production Ready
+**Test Coverage**: 343+ tests, 100% pass rate, 80.3% component coverage

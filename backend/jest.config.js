@@ -5,7 +5,14 @@ module.exports = {
   testMatch: [
     '**/*.spec.ts',
     '**/*.integration.spec.ts',
-    '**/*.e2e.spec.ts'
+    '**/*.e2e.spec.ts',
+    '**/*.smoke.spec.ts'
+  ],
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    // Exclude smoke tests from regular test runs
+    // Run them explicitly with: npm run test:smoke
+    ...(process.env.SMOKE_TESTS !== 'true' ? ['test/e2e/smoke'] : [])
   ],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',

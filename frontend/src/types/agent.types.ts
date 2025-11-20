@@ -39,17 +39,25 @@ export interface LaunchAgentResponse {
   createdAt: string;
 }
 
+/**
+ * Agent Message with ID and sequence number
+ * Matches backend AgentMessageDto
+ */
 export interface AgentMessage {
+  id: string;                    // UUID v4
+  agentId: string;
+  sequenceNumber: number;        // Monotonic sequence (1, 2, 3...)
   type: 'assistant' | 'user' | 'system' | 'error';
   role?: string;
   content: string | object;
   metadata?: Record<string, unknown>;
+  createdAt: string;             // ISO 8601 timestamp
 }
 
 export interface AgentMessageEvent {
   agentId: string;
   timestamp: string;
-  message: AgentMessage;
+  message: AgentMessage;         // Now includes id and sequenceNumber
 }
 
 export interface AgentStatusEvent {

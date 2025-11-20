@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
@@ -6,6 +6,7 @@ import { AgentType } from '@domain/value-objects/agent-type.vo';
 import { AgentConfiguration } from '@domain/value-objects/session.vo';
 import { IAgentFactory } from '@application/ports/agent-factory.port';
 import { IAgentRepository } from '@application/ports/agent-repository.port';
+import { IAgentRunner } from '@application/ports/agent-runner.port';
 import { LaunchAgentDto } from '@application/dto/launch-agent.dto';
 
 /**
@@ -15,6 +16,9 @@ import { LaunchAgentDto } from '@application/dto/launch-agent.dto';
  */
 @Injectable()
 export class AgentOrchestrationService {
+  private readonly logger = new Logger(AgentOrchestrationService.name);
+  private readonly runnerStorage: Map<string, IAgentRunner> = new Map();
+
   constructor(
     @Inject('IAgentFactory') private readonly agentFactory: IAgentFactory,
     @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository
@@ -56,11 +60,16 @@ export class AgentOrchestrationService {
     // Get appropriate runner from factory
     const runner = this.agentFactory.create(agent.type);
 
-    // Start the agent
+    // **FIX**: Save agent to database BEFORE starting runner
+    // This ensures the agent record exists when messages start arriving
+    // Prevents FOREIGN KEY constraint failures on agent_messages.agent_id
+    await this.agentRepository.save(agent);
+
+    // Start the agent (messages can now reference existing agent in DB)
     const startedAgent = await runner.start(agent.session);
 
-    // Save to repository
-    await this.agentRepository.save(startedAgent);
+    // Store runner for this agent
+    this.runnerStorage.set(startedAgent.id.toString(), runner);
 
     return startedAgent;
   }
@@ -90,6 +99,9 @@ export class AgentOrchestrationService {
 
     // Mark agent as terminated
     agent.markAsTerminated();
+
+    // Remove runner from storage
+    this.runnerStorage.delete(agentId.toString());
 
     // Save updated state
     await this.agentRepository.save(agent);
@@ -137,5 +149,39 @@ export class AgentOrchestrationService {
       throw new Error(`Agent not found: ${agentId.toString()}`);
     }
     return agent;
+  }
+
+  /**
+   * Get the runner instance for a specific agent
+   * This is the actual runner that's running the agent, not a new instance
+   * @param agentId - Agent ID
+   * @returns The runner instance
+   * @throws Error if no runner found for agent
+   */
+  getRunnerForAgent(agentId: AgentId): IAgentRunner {
+    const runner = this.runnerStorage.get(agentId.toString());
+    if (!runner) {
+      throw new Error(`No runner found for agent: ${agentId.toString()}`);
+    }
+    return runner;
+  }
+
+  /**
+   * Register a runner for an agent (for test/synthetic agents)
+   *
+   * Following LSP (Liskov Substitution Principle):
+   * Synthetic agents created outside the normal launch flow need to register
+   * their runners so clients can subscribe to them.
+   *
+   * Following OCP (Open/Closed Principle):
+   * This method extends the system to support synthetic agents without
+   * modifying existing launch logic.
+   *
+   * @param agentId - Agent ID
+   * @param runner - Runner instance
+   */
+  registerRunner(agentId: AgentId, runner: IAgentRunner): void {
+    this.runnerStorage.set(agentId.toString(), runner);
+    this.logger.log(`Runner registered for agent: ${agentId.toString()}`);
   }
 }

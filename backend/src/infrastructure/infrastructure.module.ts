@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ProcessManager } from './process/process-manager.service';
 import { ClaudeSDKAdapter } from './adapters/claude-sdk.adapter';
 import { ClaudePythonProxyAdapter } from './adapters/claude-python-proxy.adapter';
+import { SyntheticAgentAdapter } from './adapters/synthetic-agent.adapter';
 import { AgentFactoryAdapter } from './adapters/agent-factory.adapter';
 import { InMemoryAgentRepository } from './repositories/in-memory-agent.repository';
 import { SqliteAgentRepository } from './repositories/sqlite-agent.repository';
@@ -81,6 +82,9 @@ import { ConsoleLogger } from './logging/console-logger.service';
     },
     AgentFactoryAdapter,
 
+    // PHASE 4: Synthetic Agent Adapter (for testing)
+    SyntheticAgentAdapter,
+
     // Database Service
     {
       provide: DatabaseService,
@@ -134,7 +138,9 @@ import { ConsoleLogger } from './logging/console-logger.service';
     'IAgentRepository',
     ClaudeSDKAdapter,
     ClaudePythonProxyAdapter,
+    SyntheticAgentAdapter,
     ProcessManager,
+    DatabaseService,
   ],
 })
 export class InfrastructureModule {}

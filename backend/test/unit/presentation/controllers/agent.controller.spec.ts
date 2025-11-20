@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AgentController } from '@presentation/controllers/agent.controller';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
+import { AgentMessageService } from '@application/services/agent-message.service';
+import { AgentGateway } from '@application/gateways/agent.gateway';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
@@ -11,6 +13,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 describe('AgentController', () => {
   let controller: AgentController;
   let orchestrationService: jest.Mocked<AgentOrchestrationService>;
+  let mockGateway: any;
 
   beforeEach(async () => {
     // Create mock services
@@ -23,12 +26,33 @@ describe('AgentController', () => {
       getAgentById: jest.fn(),
     };
 
+    const mockMessageService = {
+      saveMessage: jest.fn(),
+      findByAgentId: jest.fn(),
+      findByAgentIdSince: jest.fn(),
+    };
+
+    // Mock AgentGateway (required for event emission)
+    mockGateway = {
+      emitToAll: jest.fn(),
+      emitToClient: jest.fn(),
+      emitToRoom: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AgentController],
       providers: [
         {
           provide: AgentOrchestrationService,
           useValue: mockOrchestrationService,
+        },
+        {
+          provide: AgentMessageService,
+          useValue: mockMessageService,
+        },
+        {
+          provide: AgentGateway,
+          useValue: mockGateway,
         },
       ],
     }).compile();

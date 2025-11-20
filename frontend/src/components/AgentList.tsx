@@ -1,4 +1,5 @@
-import { Agent } from '../types/agent.types';
+import type { Agent } from '../types/agent.types';
+import { useDesignTokens } from '../hooks/useDesignTokens';
 
 interface AgentListProps {
   agents: Agent[];
@@ -13,18 +14,20 @@ export function AgentList({
   onSelectAgent,
   onTerminateAgent,
 }: AgentListProps) {
+  const tokens = useDesignTokens();
+
   const getStatusColor = (status: string): string => {
     switch (status) {
       case 'running':
-        return '#28a745';
+        return tokens.colors.agentRunning;
       case 'completed':
-        return '#007bff';
+        return tokens.colors.agentCompleted;
       case 'failed':
-        return '#dc3545';
+        return tokens.colors.agentFailed;
       case 'terminated':
-        return '#6c757d';
+        return tokens.colors.agentTerminated;
       default:
-        return '#ffc107';
+        return tokens.colors.warning;
     }
   };
 
@@ -44,26 +47,85 @@ export function AgentList({
   };
 
   return (
-    <div style={styles.container}>
-      <h2 style={styles.title}>Agents ({agents.length})</h2>
+    <div
+      style={{
+        padding: tokens.spacing.lg,
+        backgroundColor: tokens.colors.background,
+        borderRadius: tokens.borderRadius.md,
+        boxShadow: tokens.shadows.md,
+      }}
+    >
+      <h2
+        style={{
+          margin: `0 0 ${tokens.spacing.lg} 0`,
+          fontSize: tokens.typography.fontSize.xl,
+          fontWeight: 'bold',
+          color: tokens.colors.text,
+        }}
+      >
+        Agents ({agents.length})
+      </h2>
       {agents.length === 0 ? (
-        <div style={styles.empty}>No agents yet. Launch one to get started!</div>
+        <div
+          style={{
+            textAlign: 'center',
+            padding: tokens.spacing.xl,
+            color: tokens.colors.textSecondary,
+            fontSize: tokens.typography.fontSize.md,
+          }}
+        >
+          No agents yet
+        </div>
       ) : (
-        <div style={styles.list}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.md,
+          }}
+        >
           {agents.map((agent) => (
             <div
               key={agent.id}
+              data-agent-id={agent.id}
               style={{
-                ...styles.agentCard,
-                ...(selectedAgentId === agent.id ? styles.selectedCard : {}),
+                padding: tokens.spacing.md,
+                border: `2px solid ${
+                  selectedAgentId === agent.id ? tokens.colors.borderActive : tokens.colors.border
+                }`,
+                borderRadius: tokens.borderRadius.md,
+                backgroundColor:
+                  selectedAgentId === agent.id ? '#f0f8ff' : tokens.colors.background,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
               }}
               onClick={() => onSelectAgent(agent.id)}
             >
-              <div style={styles.cardHeader}>
-                <span style={styles.agentType}>{agent.type}</span>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: tokens.spacing.md,
+                }}
+              >
                 <span
                   style={{
-                    ...styles.statusBadge,
+                    fontWeight: 'bold',
+                    fontSize: tokens.typography.fontSize.md,
+                    textTransform: 'uppercase',
+                    color: tokens.colors.text,
+                  }}
+                >
+                  {agent.type}
+                </span>
+                <span
+                  style={{
+                    padding: `${tokens.spacing.xs} ${tokens.spacing.md}`,
+                    borderRadius: tokens.borderRadius.lg,
+                    fontSize: tokens.typography.fontSize.sm,
+                    fontWeight: 'bold',
+                    color: tokens.colors.textInverse,
                     backgroundColor: getStatusColor(agent.status),
                   }}
                 >
@@ -71,13 +133,35 @@ export function AgentList({
                 </span>
               </div>
 
-              <div style={styles.cardBody}>
-                <div style={styles.prompt}>
-                  {agent.session?.prompt.substring(0, 100)}
-                  {agent.session?.prompt && agent.session.prompt.length > 100 ? '...' : ''}
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: tokens.spacing.sm,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: tokens.typography.fontSize.sm,
+                    color: tokens.colors.text,
+                    fontFamily: tokens.typography.fontFamilyMono,
+                    backgroundColor: tokens.colors.backgroundSecondary,
+                    padding: tokens.spacing.sm,
+                    borderRadius: tokens.borderRadius.sm,
+                  }}
+                >
+                  {(agent.session?.prompt || '').substring(0, 100) || 'No prompt'}
+                  {(agent.session?.prompt || '').length > 100 ? '...' : ''}
                 </div>
-                <div style={styles.metadata}>
-                  <span>ID: {agent.id.substring(0, 8)}...</span>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: tokens.typography.fontSize.xs,
+                    color: tokens.colors.textSecondary,
+                  }}
+                >
+                  <span>ID: {(agent.id || '').substring(0, 8)}...</span>
                   <span>Created: {new Date(agent.createdAt).toLocaleTimeString()}</span>
                 </div>
               </div>
@@ -88,7 +172,17 @@ export function AgentList({
                     e.stopPropagation();
                     onTerminateAgent(agent.id);
                   }}
-                  style={styles.terminateButton}
+                  style={{
+                    marginTop: tokens.spacing.md,
+                    padding: `${tokens.spacing.sm} ${tokens.spacing.md}`,
+                    backgroundColor: tokens.colors.danger,
+                    color: tokens.colors.textInverse,
+                    border: 'none',
+                    borderRadius: tokens.borderRadius.sm,
+                    cursor: 'pointer',
+                    fontSize: tokens.typography.fontSize.sm,
+                    fontWeight: 'bold',
+                  }}
                 >
                   Terminate
                 </button>
@@ -100,87 +194,3 @@ export function AgentList({
     </div>
   );
 }
-
-const styles = {
-  container: {
-    padding: '20px',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-  title: {
-    margin: '0 0 20px 0',
-    fontSize: '20px',
-    fontWeight: 'bold',
-  },
-  empty: {
-    textAlign: 'center' as const,
-    padding: '40px',
-    color: '#666',
-    fontSize: '14px',
-  },
-  list: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '12px',
-  },
-  agentCard: {
-    padding: '16px',
-    border: '2px solid #e0e0e0',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-  },
-  selectedCard: {
-    borderColor: '#007bff',
-    backgroundColor: '#f0f8ff',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '12px',
-  },
-  agentType: {
-    fontWeight: 'bold',
-    fontSize: '14px',
-    textTransform: 'uppercase' as const,
-  },
-  statusBadge: {
-    padding: '4px 12px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    color: 'white',
-  },
-  cardBody: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-  },
-  prompt: {
-    fontSize: '13px',
-    color: '#333',
-    fontFamily: 'monospace',
-    backgroundColor: '#f9f9f9',
-    padding: '8px',
-    borderRadius: '4px',
-  },
-  metadata: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '11px',
-    color: '#666',
-  },
-  terminateButton: {
-    marginTop: '12px',
-    padding: '6px 12px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold',
-  },
-};

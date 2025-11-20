@@ -1,10 +1,11 @@
-import { IAgentRunner, IAgentObserver, AgentMessage } from '@application/ports/agent-runner.port';
+import { IAgentRunner, IAgentObserver } from '@application/ports/agent-runner.port';
 import { ILogger } from '@application/ports/logger.port';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
 import { Session } from '@domain/value-objects/session.vo';
+import { ClaudeMessageParser } from '@infrastructure/parsers/claude-message.parser';
 
 /**
  * Running Agent Info for Python Proxy agents
@@ -43,6 +44,7 @@ interface ProxyAgentInfo {
  */
 export class ClaudePythonProxyAdapter implements IAgentRunner {
   private runningAgents = new Map<string, ProxyAgentInfo>();
+  private readonly parser = new ClaudeMessageParser();
 
   constructor(
     private readonly proxyUrl: string,
@@ -269,9 +271,9 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
             const errorData = JSON.parse(data || '{}');
             this.notifyObservers(agentId, 'onError', new Error(errorData.error || 'Unknown error'));
           } else if (data) {
-            // Regular message
+            // Regular message - parse from Claude CLI format to AgentMessage format
             try {
-              const message = JSON.parse(data) as AgentMessage;
+              const message = this.parser.parse(data);
               messageCount++;
 
               this.logger.debug('Proxy message received', {
