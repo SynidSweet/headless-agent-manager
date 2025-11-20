@@ -1,0 +1,56 @@
+{
+  "name": "@headless-agent-manager/client",
+  "version": "1.0.0",
+  "description": "Redux state management client for headless AI agent orchestration",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.mjs",
+      "require": "./dist/testing/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts src/testing/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts src/testing/index.ts --format cjs,esm --dts --watch",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "lint": "echo 'Lint not configured yet'",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@reduxjs/toolkit": ">=2.0.0"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@reduxjs/toolkit": "^2.0.0",
+    "@types/node": "^24.6.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "redux",
+    "rtk",
+    "agent",
+    "ai",
+    "websocket",
+    "state-management"
+  ],
+  "author": "",
+  "license": "MIT"
+}
