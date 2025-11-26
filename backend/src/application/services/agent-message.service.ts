@@ -38,11 +38,12 @@ export class AgentMessageService {
     // The subquery calculates the next sequence number within the same statement
     const insertStmt = db.prepare(`
       INSERT INTO agent_messages (
-        id, agent_id, sequence_number, type, role, content, metadata, created_at
+        id, agent_id, sequence_number, type, role, content, raw, metadata, created_at
       ) VALUES (
         ?,
         ?,
         COALESCE((SELECT MAX(sequence_number) FROM agent_messages WHERE agent_id = ?), 0) + 1,
+        ?,
         ?,
         ?,
         ?,
@@ -60,6 +61,7 @@ export class AgentMessageService {
       createDto.type,
       createDto.role || null,
       contentString,
+      createDto.raw || null,
       createDto.metadata ? JSON.stringify(createDto.metadata) : null,
       createdAt
     );
@@ -78,6 +80,7 @@ export class AgentMessageService {
       type: createDto.type,
       role: createDto.role,
       content: createDto.content,
+      raw: createDto.raw,
       metadata: createDto.metadata,
       createdAt,
     };
@@ -156,6 +159,7 @@ export class AgentMessageService {
       type: row.type,
       role: row.role || undefined,
       content,
+      raw: row.raw || undefined,
       metadata,
       createdAt: row.created_at,
     };

@@ -115,8 +115,8 @@ describe('Message Persistence Pipeline (Integration)', () => {
       const line = '{"type":"result","subtype":"success","duration_ms":1234,"total_cost_usd":0.001}';
       const message = parser.parse(line);
 
-      // Parser maps "result" to "system" type
-      expect(message.type).toBe('system');
+      // Parser maps "result" to "response" type
+      expect(message.type).toBe('response');
       expect(message.content).toBe('');
 
       const agentId = AgentId.generate();
@@ -128,7 +128,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
 
       const saved = await messageService.findByAgentId(agentId.toString());
       expect(saved).toHaveLength(1);
-      expect(saved[0]!.type).toBe('system');
+      expect(saved[0]!.type).toBe('response');
       expect(saved[0]!.content).toBe('');
       expect(saved[0]!.metadata).toHaveProperty('subtype', 'success');
       expect(saved[0]!.metadata).toHaveProperty('duration_ms', 1234);
@@ -165,7 +165,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       const line = '{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78}}}';
       const message = parser.parse(line);
 
-      expect(message.type).toBe('system');
+      expect(message.type).toBe('response'); // Maps to response when role=result
       expect(message.content).toBe('');
       expect(message.metadata?.stats).toBeDefined();
 
@@ -211,7 +211,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       expect(saved[1]!.sequenceNumber).toBe(2);
       expect(saved[2]!.type).toBe('assistant');
       expect(saved[2]!.sequenceNumber).toBe(3);
-      expect(saved[3]!.type).toBe('system'); // result mapped to system
+      expect(saved[3]!.type).toBe('response'); // result mapped to response
       expect(saved[3]!.sequenceNumber).toBe(4);
     });
 

@@ -8,9 +8,10 @@ import { Session } from '@domain/value-objects/session.vo';
  * Represents a message from the agent output stream
  */
 export interface AgentMessage {
-  type: 'assistant' | 'user' | 'system' | 'error';
+  type: 'assistant' | 'user' | 'system' | 'error' | 'tool' | 'response';
   role?: string;
   content: string | object;
+  raw?: string; // Original JSON from CLI
   metadata?: Record<string, unknown>;
 }
 

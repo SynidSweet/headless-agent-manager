@@ -23,7 +23,7 @@ export class AgentMessageDto {
   /**
    * Message type
    */
-  type!: 'user' | 'assistant' | 'system' | 'error';
+  type!: 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'response';
 
   /**
    * Message role (optional, for certain message types)
@@ -34,6 +34,11 @@ export class AgentMessageDto {
    * Message content (can be string or structured object)
    */
   content!: string | object;
+
+  /**
+   * Original JSON from CLI (optional)
+   */
+  raw?: string;
 
   /**
    * Additional metadata (JSON serializable)
@@ -59,7 +64,7 @@ export class CreateMessageDto {
   /**
    * Message type
    */
-  type!: 'user' | 'assistant' | 'system' | 'error';
+  type!: 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'response';
 
   /**
    * Message role (optional)
@@ -70,6 +75,11 @@ export class CreateMessageDto {
    * Message content
    */
   content!: string | object;
+
+  /**
+   * Original JSON from CLI (optional)
+   */
+  raw?: string;
 
   /**
    * Additional metadata (optional)

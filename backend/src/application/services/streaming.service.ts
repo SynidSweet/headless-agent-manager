@@ -145,9 +145,10 @@ export class StreamingService {
       console.log('[TRACE] Attempting DB save...');
       const savedMessage = await this.messageService.saveMessage({
         agentId: agentId.toString(),
-        type: message.type as 'user' | 'assistant' | 'system' | 'error',
+        type: message.type as 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'response',
         role: message.role,
         content: message.content,
+        raw: message.raw,
         metadata: message.metadata,
       });
       console.log('[TRACE] DB save SUCCESS', { messageId: savedMessage.id });

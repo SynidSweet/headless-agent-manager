@@ -47,9 +47,10 @@ export interface AgentMessage {
   id: string;                    // UUID v4
   agentId: string;
   sequenceNumber: number;        // Monotonic sequence (1, 2, 3...)
-  type: 'assistant' | 'user' | 'system' | 'error';
+  type: 'assistant' | 'user' | 'system' | 'error' | 'tool' | 'response';
   role?: string;
   content: string | object;
+  raw?: string;                  // Original JSON from CLI (optional)
   metadata?: Record<string, unknown>;
   createdAt: string;             // ISO 8601 timestamp
 }

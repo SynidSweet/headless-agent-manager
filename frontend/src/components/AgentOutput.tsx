@@ -1,9 +1,7 @@
-import { useEffect, useRef, useMemo } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { useDesignTokens } from '@/hooks/useDesignTokens';
-import { useDebugMode } from '@/hooks/useDebugMode';
-import { actions, selectors } from '@/store/store';
-import type { RootState, AppDispatch } from '@/store/store';
+import { useEffect, useRef, useState } from 'react';
+import { useSelector } from 'react-redux';
+import { selectors } from '@/store/store';
+import type { RootState } from '@/store/store';
 import type { AgentMessage } from '@/types/agent.types';
 
 interface AgentOutputProps {
@@ -11,296 +9,184 @@ interface AgentOutputProps {
 }
 
 export function AgentOutput({ agentId }: AgentOutputProps) {
-  const tokens = useDesignTokens();
   const outputRef = useRef<HTMLDivElement>(null);
-  const dispatch = useDispatch<AppDispatch>();
-  const { isDebugMode, toggleDebugMode } = useDebugMode();
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showRawOnHover, setShowRawOnHover] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
 
-  // Get messages from Redux store
   const messages = useSelector((state: RootState) =>
     agentId ? selectors.selectMessagesForAgent(state, agentId) : []
   );
-  const loading = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
-  );
-  const error = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
-  );
-
-  // Debug: Detect gaps in message sequence
-  const messageGaps = useMemo(() => {
-    if (!isDebugMode || messages.length === 0) return [];
-
-    const gaps: Array<{ after: number; missing: number[] }> = [];
-    const sortedMessages = [...messages].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
-
-    for (let i = 1; i < sortedMessages.length; i++) {
-      const prev = sortedMessages[i - 1].sequenceNumber;
-      const current = sortedMessages[i].sequenceNumber;
-
-      // Skip temporary messages (sequence -1)
-      if (prev === -1 || current === -1) continue;
-
-      if (current - prev > 1) {
-        const missing = [];
-        for (let j = prev + 1; j < current; j++) {
-          missing.push(j);
-        }
-        gaps.push({ after: prev, missing });
-      }
-    }
-
-    return gaps;
-  }, [messages, isDebugMode]);
-
-  // Messages are populated purely from WebSocket events via Redux
-  // No API fetching needed - the WebSocket middleware handles everything
-  // When agent:message events arrive, they're dispatched to Redux automatically
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (outputRef.current) {
+    if (outputRef.current && autoScroll) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, autoScroll]);
 
-  const renderMessageContent = (content: string | object): string => {
+  // Detect if user scrolled up
+  const handleScroll = () => {
+    if (outputRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = outputRef.current;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50;
+      setAutoScroll(isAtBottom);
+    }
+  };
+
+  const scrollToBottom = () => {
+    if (outputRef.current) {
+      outputRef.current.scrollTop = outputRef.current.scrollHeight;
+      setAutoScroll(true);
+    }
+  };
+
+  const formatTimestamp = (date: string | Date): string => {
+    const d = new Date(date);
+    const hours = d.getHours().toString().padStart(2, '0');
+    const mins = d.getMinutes().toString().padStart(2, '0');
+    const secs = d.getSeconds().toString().padStart(2, '0');
+    return `${hours}:${mins}:${secs}`;
+  };
+
+  const getMessageColor = (type: string): string => {
+    switch (type) {
+      case 'assistant':
+        return 'text-gray-700 dark:text-gray-300';
+      case 'user':
+        return 'text-blue-400';
+      case 'system':
+        return 'text-yellow-400';
+      case 'error':
+        return 'text-red-400';
+      case 'tool':
+        return 'text-purple-400';
+      case 'response':
+        return 'text-green-400';
+      default:
+        return 'text-gray-700 dark:text-gray-300';
+    }
+  };
+
+  const getTypeTagColor = (type: string): string => {
+    switch (type) {
+      case 'assistant':
+        return 'text-blue-500 dark:text-blue-400';
+      case 'user':
+        return 'text-cyan-500 dark:text-cyan-400';
+      case 'system':
+        return 'text-yellow-500 dark:text-yellow-400';
+      case 'error':
+        return 'text-red-500 dark:text-red-400';
+      case 'tool':
+        return 'text-purple-500 dark:text-purple-400';
+      case 'response':
+        return 'text-green-500 dark:text-green-400';
+      default:
+        return 'text-gray-500 dark:text-gray-400';
+    }
+  };
+
+  const renderContent = (content: string | object): string => {
     if (typeof content === 'string') {
       return content;
     }
     return JSON.stringify(content, null, 2);
   };
 
-  const getMessageStyle = (type: string) => {
-    const baseStyle = {
-      padding: tokens.spacing.md,
-      borderRadius: tokens.borderRadius.md,
-      border: `1px solid ${tokens.colors.border}`,
-    };
-
-    switch (type) {
-      case 'assistant':
-        return { ...baseStyle, backgroundColor: '#e3f2fd', color: tokens.colors.text };
-      case 'user':
-        return { ...baseStyle, backgroundColor: '#f1f8e9', color: tokens.colors.text };
-      case 'system':
-        return { ...baseStyle, backgroundColor: '#fff3e0', color: tokens.colors.text };
-      case 'error':
-        return { ...baseStyle, backgroundColor: '#ffebee', color: tokens.colors.danger };
-      default:
-        return baseStyle;
-    }
-  };
-
-  // Don't render if no agent selected
   if (!agentId) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '100%',
-          backgroundColor: tokens.colors.background,
-          borderRadius: tokens.borderRadius.md,
-          boxShadow: tokens.shadows.md,
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            textAlign: 'center',
-            padding: tokens.spacing.xl,
-            color: tokens.colors.textSecondary,
-            fontStyle: 'italic',
-          }}
-        >
-          Select an agent to view output
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        backgroundColor: tokens.colors.background,
-        borderRadius: tokens.borderRadius.md,
-        boxShadow: tokens.shadows.md,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
-          borderBottom: `1px solid ${tokens.colors.border}`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <h3
-          style={{
-            margin: 0,
-            fontSize: tokens.typography.fontSize.lg,
-            fontWeight: 'bold',
-            color: tokens.colors.text,
-          }}
-        >
-          Output
-        </h3>
-        <div style={{ display: 'flex', gap: tokens.spacing.md, alignItems: 'center' }}>
-          {/* Gap detection indicator (debug mode only) */}
-          {isDebugMode && messageGaps.length > 0 && (
-            <div
-              style={{
-                fontSize: tokens.typography.fontSize.sm,
-                color: tokens.colors.warning,
-                backgroundColor: '#fff3cd',
-                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-                borderRadius: tokens.borderRadius.sm,
-              }}
-            >
-              ⚠️ {messageGaps.length} gap{messageGaps.length > 1 ? 's' : ''} detected
-            </div>
-          )}
-          {/* Debug mode toggle */}
-          <button
-            onClick={toggleDebugMode}
-            style={{
-              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
-              fontSize: tokens.typography.fontSize.sm,
-              backgroundColor: isDebugMode ? tokens.colors.primary : tokens.colors.backgroundSecondary,
-              color: isDebugMode ? tokens.colors.textInverse : tokens.colors.text,
-              border: `1px solid ${tokens.colors.border}`,
-              borderRadius: tokens.borderRadius.sm,
-              cursor: 'pointer',
-            }}
-            title="Toggle debug mode (shows sequence numbers and gap detection)"
-          >
-            🐛 Debug {isDebugMode ? 'ON' : 'OFF'}
-          </button>
-        </div>
+    <div className="relative flex-1 overflow-hidden">
+      {/* Toggle for raw JSON on hover */}
+      <div className="absolute top-4 right-4 z-10">
+        <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-[#1e1e2e] px-3 py-2 rounded-lg shadow-md border border-gray-200 dark:border-[#313244]">
+          <input
+            type="checkbox"
+            checked={showRawOnHover}
+            onChange={(e) => setShowRawOnHover(e.target.checked)}
+            className="w-4 h-4 text-primary bg-gray-100 dark:bg-[#313244] border-gray-300 dark:border-[#45475a] rounded focus:ring-primary focus:ring-2"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Show Raw JSON</span>
+        </label>
       </div>
 
       <div
         ref={outputRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: tokens.spacing.lg,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: tokens.spacing.md,
-        }}
+        onScroll={handleScroll}
+        className="h-full overflow-y-auto p-6 pt-16"
         data-testid="agent-output"
       >
-        {error ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: tokens.spacing.lg,
-              color: tokens.colors.danger,
-              backgroundColor: '#ffebee',
-              borderRadius: tokens.borderRadius.md,
-              margin: tokens.spacing.lg,
-            }}
-          >
-            Error loading messages: {error}
-          </div>
-        ) : loading ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: tokens.spacing.xl,
-              color: tokens.colors.textSecondary,
-              fontStyle: 'italic',
-            }}
-          >
-            Loading messages...
-          </div>
-        ) : messages.length === 0 ? (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: tokens.spacing.xl,
-              color: tokens.colors.textSecondary,
-              fontStyle: 'italic',
-            }}
-          >
-            No messages yet
-          </div>
-        ) : (
-          messages.map((message: AgentMessage) => (
-            <div
-              key={message.id}
-              data-message
-              data-message-id={message.id}
-              data-sequence={message.sequenceNumber}
-              data-message-type={message.type}
-              style={getMessageStyle(message.type)}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: tokens.spacing.sm,
-                  fontSize: tokens.typography.fontSize.sm,
-                }}
-              >
-                <div style={{ display: 'flex', gap: tokens.spacing.sm, alignItems: 'center' }}>
-                  <span
-                    style={{
-                      fontWeight: 'bold',
-                      textTransform: 'uppercase',
-                      color: tokens.colors.text,
-                    }}
-                  >
-                    {message.type}
-                  </span>
-                  {/* Debug: Show sequence number */}
-                  {isDebugMode && (
-                    <span
-                      style={{
-                        fontSize: tokens.typography.fontSize.xs,
-                        color: tokens.colors.textSecondary,
-                        fontFamily: tokens.typography.fontFamilyMono,
-                        backgroundColor: tokens.colors.backgroundSecondary,
-                        padding: `2px ${tokens.spacing.xs}`,
-                        borderRadius: tokens.borderRadius.sm,
-                      }}
-                      title="Sequence number"
-                    >
-                      #{message.sequenceNumber === -1 ? 'temp' : message.sequenceNumber}
-                    </span>
+        <div className="font-mono text-sm text-gray-500 dark:text-gray-400">
+          {messages.length === 0 ? (
+            <div className="flex items-center justify-center h-32 text-gray-500 dark:text-[#545a78]">
+              Waiting for agent output...
+            </div>
+          ) : (
+            messages.map((message: AgentMessage) => {
+              const hasRaw = !!message.raw;
+              return (
+                <div
+                  key={message.id}
+                  className="relative mt-2 group"
+                  onMouseEnter={() => {
+                    if (showRawOnHover) {
+                      console.log('Hovering message:', message.id, 'Has raw:', hasRaw);
+                      setHoveredMessageId(message.id);
+                    }
+                  }}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                >
+                  <pre className={`whitespace-pre-wrap break-words ${getMessageColor(message.type)}`} data-message data-message-id={message.id}>
+                    <span className="text-gray-500 dark:text-gray-500">{formatTimestamp(message.createdAt)}</span>{' '}
+                    <span className={`font-semibold ${getTypeTagColor(message.type)}`}>[{message.type}]</span>{' '}
+                    {hasRaw && showRawOnHover && (
+                      <span className="text-xs text-green-500" title="Has raw JSON">📋</span>
+                    )}{' '}
+                    {renderContent(message.content)}
+                  </pre>
+
+                  {/* Raw JSON tooltip */}
+                  {showRawOnHover && hoveredMessageId === message.id && hasRaw && (
+                    <div className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 w-[90vw] max-w-4xl">
+                      <div className="bg-gray-900 dark:bg-[#11111b] text-gray-100 dark:text-[#cdd6f4] p-6 rounded-lg shadow-2xl border-2 border-gray-700 dark:border-[#45475a] max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4">
+                          <div className="text-sm font-semibold text-gray-400 dark:text-[#a6adc8]">
+                            Raw JSON (Message {message.sequenceNumber})
+                          </div>
+                          <button
+                            onClick={() => setHoveredMessageId(null)}
+                            className="text-gray-400 hover:text-gray-200 text-2xl leading-none"
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <pre className="text-xs whitespace-pre-wrap break-words font-mono">
+                          {JSON.stringify(JSON.parse(message.raw!), null, 2)}
+                        </pre>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <span
-                  style={{
-                    color: tokens.colors.textSecondary,
-                  }}
-                >
-                  {new Date(message.createdAt).toLocaleTimeString()}
-                </span>
-              </div>
-              <pre
-                style={{
-                  margin: 0,
-                  fontFamily: tokens.typography.fontFamilyMono,
-                  fontSize: tokens.typography.fontSize.sm,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  color: message.type === 'error' ? tokens.colors.danger : tokens.colors.text,
-                }}
-              >
-                {renderMessageContent(message.content)}
-              </pre>
-            </div>
-          ))
-        )}
+              );
+            })
+          )}
+        </div>
       </div>
+
+      {/* Scroll to bottom button */}
+      {!autoScroll && messages.length > 0 && (
+        <div className="absolute bottom-6 right-6">
+          <button
+            onClick={scrollToBottom}
+            className="flex size-10 items-center justify-center rounded-full bg-primary/80 text-white backdrop-blur-sm transition-all hover:bg-primary"
+          >
+            <span className="material-symbols-outlined">south</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 }

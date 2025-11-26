@@ -28,9 +28,10 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   id TEXT PRIMARY KEY,              -- UUID v4 for deduplication
   agent_id TEXT NOT NULL,
   sequence_number INTEGER NOT NULL,  -- Monotonic sequence per agent (1, 2, 3...)
-  type TEXT NOT NULL,                -- 'assistant', 'user', 'system', 'error'
+  type TEXT NOT NULL,                -- 'assistant', 'user', 'system', 'error', 'tool', 'response'
   role TEXT,
   content TEXT NOT NULL,
+  raw TEXT,                          -- Original JSON from CLI (optional)
   metadata TEXT,                     -- JSON serialized metadata
   created_at TEXT NOT NULL,          -- ISO 8601 timestamp
   FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
