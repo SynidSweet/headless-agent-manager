@@ -1,4 +1,4 @@
-import type { Agent, LaunchAgentRequest, LaunchAgentResponse, AgentMessage } from '../types/agent.types';
+import type { Agent, LaunchAgentRequest, LaunchAgentResponse, AgentMessage } from '@/types/agent.types';
 
 // Determine API base URL at runtime
 const getApiBaseUrl = (): string => {

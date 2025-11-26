@@ -133,7 +133,7 @@ class TestStreamEndpoint:
         self.client = TestClient(app)
 
     @patch("app.claude_runner.ClaudeRunner.start_agent")
-    @patch("app.claude_runner.ClaudeRunner.read_stream")
+    @patch("app.claude_runner.ClaudeRunner.async_read_stream")
     def test_stream_endpoint_returns_sse(self, mock_read, mock_start):
         """Test that stream endpoint returns Server-Sent Events"""
         # Arrange
@@ -141,10 +141,12 @@ class TestStreamEndpoint:
         mock_process.pid = 12345
         mock_start.return_value = mock_process
 
-        mock_read.return_value = iter([
-            '{"type":"system","content":"init"}',
-            '{"type":"assistant","content":"hello"}',
-        ])
+        # Create an async generator mock
+        async def mock_async_gen(process):
+            for line in ['{"type":"system","content":"init"}', '{"type":"assistant","content":"hello"}']:
+                yield line
+
+        mock_read.side_effect = mock_async_gen
 
         # Act
         response = self.client.post(
@@ -157,7 +159,7 @@ class TestStreamEndpoint:
         assert "text/event-stream" in response.headers.get("content-type", "")
 
     @patch("app.claude_runner.ClaudeRunner.start_agent")
-    @patch("app.claude_runner.ClaudeRunner.read_stream")
+    @patch("app.claude_runner.ClaudeRunner.async_read_stream")
     def test_stream_endpoint_streams_lines(self, mock_read, mock_start):
         """Test that stream endpoint yields each line"""
         # Arrange
@@ -169,7 +171,12 @@ class TestStreamEndpoint:
             '{"type":"assistant","content":"response"}',
             '{"type":"result","content":"done"}',
         ]
-        mock_read.return_value = iter(test_lines)
+
+        async def mock_async_gen(process):
+            for line in test_lines:
+                yield line
+
+        mock_read.side_effect = mock_async_gen
 
         # Act
         response = self.client.post(

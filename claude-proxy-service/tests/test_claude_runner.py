@@ -103,6 +103,29 @@ class TestClaudeRunner:
         assert "--verbose" in call_args[0][0]
 
     @patch("subprocess.Popen")
+    def test_start_agent_includes_partial_messages_flag(self, mock_popen):
+        """
+        CRITICAL: Test that --include-partial-messages is included.
+
+        This flag is REQUIRED for real-time streaming. Without it,
+        Claude CLI only outputs complete messages, not streaming tokens.
+        """
+        # Arrange
+        mock_process = MagicMock()
+        mock_popen.return_value = mock_process
+
+        # Act
+        self.runner.start_agent("test", {})
+
+        # Assert
+        call_args = mock_popen.call_args
+        command = call_args[0][0]
+        assert "--include-partial-messages" in command, (
+            "Missing --include-partial-messages flag! "
+            "This is required for real-time streaming."
+        )
+
+    @patch("subprocess.Popen")
     def test_start_agent_with_session_id(self, mock_popen):
         """Test that session ID is passed when provided"""
         # Arrange

@@ -10,11 +10,9 @@ import { launchAgent } from '@headless-agent-manager/client';
  * Tests for agent launch form functionality
  */
 describe('AgentLaunchForm', () => {
-  let mockOnAgentLaunched: ReturnType<typeof vi.fn>;
   let store: ReturnType<typeof createMockStore>;
 
   beforeEach(() => {
-    mockOnAgentLaunched = vi.fn();
     store = createMockStore();
     vi.clearAllMocks();
   });
@@ -25,7 +23,7 @@ describe('AgentLaunchForm', () => {
 
   describe('Rendering', () => {
     it('should render form with all fields', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       expect(screen.getByText('Launch New Agent')).toBeInTheDocument();
       expect(screen.getByLabelText(/Agent Type/i)).toBeInTheDocument();
@@ -34,14 +32,14 @@ describe('AgentLaunchForm', () => {
     });
 
     it('should have Claude Code selected by default', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const select = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
       expect(select.value).toBe('claude-code');
     });
 
     it('should have both agent type options', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       expect(screen.getByText('Claude Code')).toBeInTheDocument();
       expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
@@ -50,7 +48,7 @@ describe('AgentLaunchForm', () => {
 
   describe('Form validation', () => {
     it('should show error when prompt is empty', async () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
       fireEvent.click(submitButton);
@@ -58,12 +56,10 @@ describe('AgentLaunchForm', () => {
       await waitFor(() => {
         expect(screen.getByText('Prompt is required')).toBeInTheDocument();
       });
-
-      expect(mockOnAgentLaunched).not.toHaveBeenCalled();
     });
 
     it('should not show error when prompt has only whitespace', async () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const promptInput = screen.getByLabelText(/Prompt/i);
       fireEvent.change(promptInput, { target: { value: '   ' } });
@@ -79,7 +75,7 @@ describe('AgentLaunchForm', () => {
 
   describe('Agent type selection', () => {
     it('should allow changing agent type', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const select = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
       fireEvent.change(select, { target: { value: 'gemini-cli' } });
@@ -101,7 +97,7 @@ describe('AgentLaunchForm', () => {
       // Spy on store dispatch
       const dispatchSpy = vi.spyOn(store, 'dispatch');
 
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const promptInput = screen.getByLabelText(/Prompt/i);
       fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
@@ -115,7 +111,7 @@ describe('AgentLaunchForm', () => {
     });
 
     it('should clear prompt after successful launch', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const promptInput = screen.getByLabelText(/Prompt/i);
       fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
@@ -126,7 +122,7 @@ describe('AgentLaunchForm', () => {
 
   describe('Loading state', () => {
     it('should disable button while launching', () => {
-      renderWithProvider(<AgentLaunchForm onAgentLaunched={mockOnAgentLaunched} />);
+      renderWithProvider(<AgentLaunchForm />);
 
       const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
       expect(submitButton).not.toBeDisabled();

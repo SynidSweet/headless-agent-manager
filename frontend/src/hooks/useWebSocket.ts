@@ -5,7 +5,7 @@ import type {
   AgentStatusEvent,
   AgentErrorEvent,
   AgentCompleteEvent,
-} from '../types/agent.types';
+} from '@/types/agent.types';
 
 // WebSocket URL determined at runtime, not module load time
 

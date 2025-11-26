@@ -4,7 +4,7 @@
  */
 
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import type { Agent, LaunchAgentRequest } from '../../types';
+import type { Agent, LaunchAgentRequest, LaunchAgentResponse } from '../../types';
 import { AgentApiClient } from '../../api/AgentApiClient';
 
 /**
@@ -18,6 +18,9 @@ export interface AgentsState {
   // Selection
   selectedAgentId: string | null;
 
+  // Track pending launch for auto-selection
+  pendingLaunchId: string | null;
+
   // UI state
   loading: boolean;
   error: string | null;
@@ -30,6 +33,7 @@ const initialState: AgentsState = {
   byId: {},
   allIds: [],
   selectedAgentId: null,
+  pendingLaunchId: null,
   loading: false,
   error: null,
   lastFetched: null,
@@ -50,7 +54,7 @@ export const fetchAgents = createAsyncThunk(
   }
 );
 
-export const launchAgent = createAsyncThunk(
+export const launchAgent = createAsyncThunk<LaunchAgentResponse, LaunchAgentRequest>(
   'agents/launch',
   async (params: LaunchAgentRequest) => {
     return await AgentApiClient.launchAgent(params);
@@ -122,6 +126,13 @@ export const agentsSlice = createSlice({
         state.allIds.push(agent.id);
       }
       console.log('[Redux] Agent created via lifecycle event:', agent.id);
+
+      // If this is the agent we're waiting for, ensure it's selected and clear pending
+      if (state.pendingLaunchId === agent.id) {
+        state.selectedAgentId = agent.id;
+        state.pendingLaunchId = null;
+        console.log('[Redux] Auto-selected newly launched agent:', agent.id);
+      }
     },
 
     // Handle agent:updated event from backend
@@ -185,15 +196,21 @@ export const agentsSlice = createSlice({
 
     /**
      * launchAgent async thunk
+     * NOTE: We don't add the agent here - that happens via WebSocket 'agent:created' event
+     * This follows event-driven architecture: HTTP for commands, WebSocket for state updates
      */
     builder.addCase(launchAgent.fulfilled, (state, action) => {
-      const agent = action.payload;
-      state.byId[agent.id] = agent;
-      if (!state.allIds.includes(agent.id)) {
-        state.allIds.push(agent.id);
-      }
-      // Auto-select newly launched agent
-      state.selectedAgentId = agent.id;
+      const response = action.payload;
+      // Mark this agent as pending launch for auto-selection when it arrives via WebSocket
+      state.pendingLaunchId = response.agentId;
+      // Also set selection immediately for instant feedback
+      state.selectedAgentId = response.agentId;
+    });
+
+    builder.addCase(launchAgent.rejected, (state, action) => {
+      // Clear pending launch on failure
+      state.pendingLaunchId = null;
+      state.error = action.error.message || 'Failed to launch agent';
     });
 
     /**

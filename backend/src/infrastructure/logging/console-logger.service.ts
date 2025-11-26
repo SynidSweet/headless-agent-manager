@@ -9,11 +9,27 @@ import { ILogger } from '@application/ports/logger.port';
 @Injectable()
 export class ConsoleLogger implements ILogger, NestLoggerService {
   /**
+   * Safely stringify context object, handling circular references
+   */
+  private safeStringify(context?: Record<string, unknown>): string {
+    if (!context) {
+      return '';
+    }
+
+    try {
+      return JSON.stringify(context);
+    } catch (error) {
+      // Handle circular references or other serialization errors
+      return '[Context serialization failed: Circular reference or invalid data]';
+    }
+  }
+
+  /**
    * Log debug message
    */
   debug(message: string, context?: Record<string, unknown>): void {
     const timestamp = new Date().toISOString();
-    console.log(`[DEBUG] ${timestamp} - ${message}`, context ? JSON.stringify(context) : '');
+    console.log(`[DEBUG] ${timestamp} - ${message}`, this.safeStringify(context));
   }
 
   /**
@@ -21,7 +37,7 @@ export class ConsoleLogger implements ILogger, NestLoggerService {
    */
   info(message: string, context?: Record<string, unknown>): void {
     const timestamp = new Date().toISOString();
-    console.log(`[INFO] ${timestamp} - ${message}`, context ? JSON.stringify(context) : '');
+    console.log(`[INFO] ${timestamp} - ${message}`, this.safeStringify(context));
   }
 
   /**
@@ -37,7 +53,7 @@ export class ConsoleLogger implements ILogger, NestLoggerService {
    */
   warn(message: string, context?: Record<string, unknown>): void {
     const timestamp = new Date().toISOString();
-    console.warn(`[WARN] ${timestamp} - ${message}`, context ? JSON.stringify(context) : '');
+    console.warn(`[WARN] ${timestamp} - ${message}`, this.safeStringify(context));
   }
 
   /**
@@ -45,7 +61,7 @@ export class ConsoleLogger implements ILogger, NestLoggerService {
    */
   error(message: string, context?: Record<string, unknown>): void {
     const timestamp = new Date().toISOString();
-    console.error(`[ERROR] ${timestamp} - ${message}`, context ? JSON.stringify(context) : '');
+    console.error(`[ERROR] ${timestamp} - ${message}`, this.safeStringify(context));
   }
 
   /**

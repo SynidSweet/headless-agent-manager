@@ -77,13 +77,18 @@ export const selectFailedAgents = createSelector(
  * Message selectors
  */
 
-export const selectMessagesForAgent = (
-  state: RootState,
-  agentId: string
-): AgentMessage[] => {
-  const agentMessages = state.messages.byAgentId[agentId];
-  return agentMessages?.messages || [];
-};
+// Memoized selector factory for messages by agent ID
+// This prevents unnecessary re-renders when the same agent is selected
+export const selectMessagesForAgent = createSelector(
+  [
+    (state: RootState) => state.messages.byAgentId,
+    (_state: RootState, agentId: string) => agentId,
+  ],
+  (byAgentId, agentId): AgentMessage[] => {
+    const agentMessages = byAgentId[agentId];
+    return agentMessages?.messages || [];
+  }
+);
 
 export const selectMessagesForSelectedAgent = createSelector(
   [selectAgentsState, selectMessagesState],

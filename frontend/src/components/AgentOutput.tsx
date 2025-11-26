@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useDesignTokens } from '@/hooks/useDesignTokens';
-import { actions, selectors } from '../store/store';
-import type { RootState, AppDispatch } from '../store/store';
+import { useDebugMode } from '@/hooks/useDebugMode';
+import { actions, selectors } from '@/store/store';
+import type { RootState, AppDispatch } from '@/store/store';
 import type { AgentMessage } from '@/types/agent.types';
 
 interface AgentOutputProps {
@@ -13,6 +14,7 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
   const tokens = useDesignTokens();
   const outputRef = useRef<HTMLDivElement>(null);
   const dispatch = useDispatch<AppDispatch>();
+  const { isDebugMode, toggleDebugMode } = useDebugMode();
 
   // Get messages from Redux store
   const messages = useSelector((state: RootState) =>
@@ -25,13 +27,35 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
     agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
   );
 
-  // Fetch messages from API when agent is selected (in case WebSocket missed them)
-  useEffect(() => {
-    if (agentId && messages.length === 0 && !loading) {
-      console.log('[AgentOutput] Fetching messages from API for agent:', agentId);
-      dispatch(actions.fetchMessages(agentId));
+  // Debug: Detect gaps in message sequence
+  const messageGaps = useMemo(() => {
+    if (!isDebugMode || messages.length === 0) return [];
+
+    const gaps: Array<{ after: number; missing: number[] }> = [];
+    const sortedMessages = [...messages].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+
+    for (let i = 1; i < sortedMessages.length; i++) {
+      const prev = sortedMessages[i - 1].sequenceNumber;
+      const current = sortedMessages[i].sequenceNumber;
+
+      // Skip temporary messages (sequence -1)
+      if (prev === -1 || current === -1) continue;
+
+      if (current - prev > 1) {
+        const missing = [];
+        for (let j = prev + 1; j < current; j++) {
+          missing.push(j);
+        }
+        gaps.push({ after: prev, missing });
+      }
     }
-  }, [agentId, messages.length, loading, dispatch]);
+
+    return gaps;
+  }, [messages, isDebugMode]);
+
+  // Messages are populated purely from WebSocket events via Redux
+  // No API fetching needed - the WebSocket middleware handles everything
+  // When agent:message events arrive, they're dispatched to Redux automatically
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -112,6 +136,9 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
         style={{
           padding: `${tokens.spacing.md} ${tokens.spacing.lg}`,
           borderBottom: `1px solid ${tokens.colors.border}`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
         <h3
@@ -124,6 +151,38 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
         >
           Output
         </h3>
+        <div style={{ display: 'flex', gap: tokens.spacing.md, alignItems: 'center' }}>
+          {/* Gap detection indicator (debug mode only) */}
+          {isDebugMode && messageGaps.length > 0 && (
+            <div
+              style={{
+                fontSize: tokens.typography.fontSize.sm,
+                color: tokens.colors.warning,
+                backgroundColor: '#fff3cd',
+                padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+                borderRadius: tokens.borderRadius.sm,
+              }}
+            >
+              ⚠️ {messageGaps.length} gap{messageGaps.length > 1 ? 's' : ''} detected
+            </div>
+          )}
+          {/* Debug mode toggle */}
+          <button
+            onClick={toggleDebugMode}
+            style={{
+              padding: `${tokens.spacing.xs} ${tokens.spacing.sm}`,
+              fontSize: tokens.typography.fontSize.sm,
+              backgroundColor: isDebugMode ? tokens.colors.primary : tokens.colors.backgroundSecondary,
+              color: isDebugMode ? tokens.colors.textInverse : tokens.colors.text,
+              border: `1px solid ${tokens.colors.border}`,
+              borderRadius: tokens.borderRadius.sm,
+              cursor: 'pointer',
+            }}
+            title="Toggle debug mode (shows sequence numbers and gap detection)"
+          >
+            🐛 Debug {isDebugMode ? 'ON' : 'OFF'}
+          </button>
+        </div>
       </div>
 
       <div
@@ -191,15 +250,33 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
                   fontSize: tokens.typography.fontSize.sm,
                 }}
               >
-                <span
-                  style={{
-                    fontWeight: 'bold',
-                    textTransform: 'uppercase',
-                    color: tokens.colors.text,
-                  }}
-                >
-                  {message.type}
-                </span>
+                <div style={{ display: 'flex', gap: tokens.spacing.sm, alignItems: 'center' }}>
+                  <span
+                    style={{
+                      fontWeight: 'bold',
+                      textTransform: 'uppercase',
+                      color: tokens.colors.text,
+                    }}
+                  >
+                    {message.type}
+                  </span>
+                  {/* Debug: Show sequence number */}
+                  {isDebugMode && (
+                    <span
+                      style={{
+                        fontSize: tokens.typography.fontSize.xs,
+                        color: tokens.colors.textSecondary,
+                        fontFamily: tokens.typography.fontFamilyMono,
+                        backgroundColor: tokens.colors.backgroundSecondary,
+                        padding: `2px ${tokens.spacing.xs}`,
+                        borderRadius: tokens.borderRadius.sm,
+                      }}
+                      title="Sequence number"
+                    >
+                      #{message.sequenceNumber === -1 ? 'temp' : message.sequenceNumber}
+                    </span>
+                  )}
+                </div>
                 <span
                   style={{
                     color: tokens.colors.textSecondary,

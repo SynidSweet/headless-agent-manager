@@ -64,6 +64,25 @@ export class Agent {
   }
 
   /**
+   * Create agent with specific ID (for testing and special cases)
+   * @param id - Pre-determined agent ID
+   * @param data - Agent creation data
+   * @returns New agent instance in INITIALIZING state
+   * @throws DomainException if data is invalid
+   */
+  static createWithId(id: AgentId, data: CreateAgentData): Agent {
+    // Validate type
+    if (!data.type) {
+      throw new DomainException('Agent type is required');
+    }
+
+    // Create session (will validate prompt)
+    const session = Session.create(data.prompt, data.configuration);
+
+    return new Agent(id, data.type, AgentStatus.INITIALIZING, session, new Date());
+  }
+
+  /**
    * Mark agent as running
    * Transitions from INITIALIZING to RUNNING
    * @throws DomainException if not in INITIALIZING state

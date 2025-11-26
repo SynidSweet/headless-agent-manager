@@ -9,17 +9,21 @@ describe('AgentType Value Object', () => {
     it('should have GEMINI_CLI type', () => {
       expect(AgentType.GEMINI_CLI).toBe('gemini-cli');
     });
+
+    it('should have SYNTHETIC type for testing', () => {
+      expect(AgentType.SYNTHETIC).toBe('synthetic');
+    });
   });
 
   describe('enum completeness', () => {
-    it('should have exactly 2 agent types for MVP', () => {
+    it('should have exactly 3 agent types (MVP + testing)', () => {
       const types = Object.values(AgentType);
-      expect(types).toHaveLength(2);
+      expect(types).toHaveLength(3);
     });
 
     it('should contain all expected agent types', () => {
       const types = Object.values(AgentType);
-      expect(types).toEqual(['claude-code', 'gemini-cli']);
+      expect(types).toEqual(['claude-code', 'gemini-cli', 'synthetic']);
     });
   });
 
@@ -30,9 +34,13 @@ describe('AgentType Value Object', () => {
     });
 
     it('should support all agent types', () => {
-      const types: AgentType[] = [AgentType.CLAUDE_CODE, AgentType.GEMINI_CLI];
+      const types: AgentType[] = [
+        AgentType.CLAUDE_CODE,
+        AgentType.GEMINI_CLI,
+        AgentType.SYNTHETIC,
+      ];
 
-      expect(types).toHaveLength(2);
+      expect(types).toHaveLength(3);
     });
   });
 
@@ -40,6 +48,7 @@ describe('AgentType Value Object', () => {
     it('should have kebab-case format for CLI compatibility', () => {
       expect(AgentType.CLAUDE_CODE).toMatch(/^[a-z]+(-[a-z]+)*$/);
       expect(AgentType.GEMINI_CLI).toMatch(/^[a-z]+(-[a-z]+)*$/);
+      expect(AgentType.SYNTHETIC).toMatch(/^[a-z]+(-[a-z]+)*$/);
     });
   });
 });

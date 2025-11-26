@@ -8,6 +8,7 @@ import type {
   Agent,
   AgentMessage,
   LaunchAgentRequest,
+  LaunchAgentResponse,
   AgentClientConfig,
 } from '../types';
 
@@ -46,7 +47,7 @@ class AgentApiClientClass {
   /**
    * Launch a new agent
    */
-  async launchAgent(request: LaunchAgentRequest): Promise<Agent> {
+  async launchAgent(request: LaunchAgentRequest): Promise<LaunchAgentResponse> {
     const response = await this.fetch('/api/agents', {
       method: 'POST',
       body: JSON.stringify(request),
@@ -58,7 +59,7 @@ class AgentApiClientClass {
       );
     }
 
-    return response.json() as Promise<Agent>;
+    return response.json() as Promise<LaunchAgentResponse>;
   }
 
   /**

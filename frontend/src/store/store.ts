@@ -5,14 +5,44 @@
 
 import { createAgentClient } from '@headless-agent-manager/client';
 
-// Get URLs from environment or use defaults
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-const WS_URL = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+/**
+ * Determine API and WebSocket URLs at runtime
+ * This allows the same build to work in development and production
+ */
+const getUrls = () => {
+  // Check if explicitly set via environment variables (build time)
+  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_WS_URL) {
+    return {
+      apiUrl: import.meta.env.VITE_API_URL,
+      wsUrl: import.meta.env.VITE_WS_URL,
+    };
+  }
+
+  // Runtime detection based on hostname
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+    // Production: use same origin
+    const origin = window.location.origin; // e.g., https://agents.petter.ai
+    return {
+      apiUrl: origin,
+      wsUrl: origin,
+    };
+  }
+
+  // Development: use localhost
+  return {
+    apiUrl: 'http://localhost:3000',
+    wsUrl: 'http://localhost:3000',
+  };
+};
+
+const { apiUrl, wsUrl } = getUrls();
+
+console.log('[Store] Configured URLs:', { apiUrl, wsUrl });
 
 // Create configured client
 const client = createAgentClient({
-  apiUrl: API_URL,
-  websocketUrl: WS_URL,
+  apiUrl,
+  websocketUrl: wsUrl,
   debug: import.meta.env.DEV,
 });
 

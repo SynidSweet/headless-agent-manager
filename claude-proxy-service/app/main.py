@@ -118,12 +118,14 @@ async def stream_agent(request: StartAgentRequest) -> StreamingResponse:
         agent_id = str(uuid.uuid4())
         active_processes[agent_id] = process
 
-        # Stream generator
+        # Stream generator - using async for true real-time streaming
         async def event_generator():
-            """Generate SSE events from Claude CLI output"""
+            """Generate SSE events from Claude CLI output in real-time"""
             try:
-                for line in claude_runner.read_stream(process):
-                    # Send as SSE event
+                # CRITICAL: Use async_read_stream for non-blocking reads
+                # This yields each line as it arrives, not buffered
+                async for line in claude_runner.async_read_stream(process):
+                    # Send as SSE event immediately
                     yield f"data: {line}\n\n"
 
                 # Send completion event

@@ -3,11 +3,12 @@ Claude CLI Runner Service
 Handles spawning and managing Claude CLI processes with Max subscription support.
 """
 
+import asyncio
 import os
 import subprocess
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, AsyncIterator, Dict, Iterator, Optional
 
 
 @dataclass
@@ -97,7 +98,7 @@ class ClaudeRunner:
 
     def read_stream(self, process: subprocess.Popen[bytes]) -> Iterator[str]:
         """
-        Read lines from process stdout.
+        Read lines from process stdout (synchronous).
 
         Args:
             process: The subprocess to read from
@@ -114,6 +115,42 @@ class ClaudeRunner:
             if decoded:
                 yield decoded
 
+    async def async_read_stream(
+        self, process: subprocess.Popen[bytes]
+    ) -> AsyncIterator[str]:
+        """
+        Read lines from process stdout asynchronously.
+
+        This method is CRITICAL for real-time streaming in async contexts.
+        It yields each line as soon as it's available, without blocking
+        the event loop.
+
+        Args:
+            process: The subprocess to read from
+
+        Yields:
+            str: Lines from stdout as they become available
+        """
+        if not process.stdout:
+            return
+
+        loop = asyncio.get_event_loop()
+
+        def read_line() -> bytes:
+            """Read a single line (blocking)."""
+            return process.stdout.readline()  # type: ignore
+
+        while True:
+            # Run blocking readline in thread pool to not block event loop
+            line = await loop.run_in_executor(None, read_line)
+
+            if not line:  # EOF
+                break
+
+            decoded = line.decode("utf-8").strip()
+            if decoded:
+                yield decoded
+
     def _build_command(self, prompt: str, options: Dict[str, Any]) -> str:
         """Build Claude CLI command string"""
         parts = [
@@ -123,6 +160,7 @@ class ClaudeRunner:
             "--output-format",
             "stream-json",
             "--verbose",  # Required for stream-json
+            "--include-partial-messages",  # CRITICAL: Enable real-time streaming
         ]
 
         # Add session ID if provided

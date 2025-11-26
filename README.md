@@ -5,12 +5,13 @@ A production-ready system for orchestrating multiple headless AI agents with rea
 ## Features
 
 - 🤖 **Multi-Agent Orchestration** - Run multiple Claude Code and Gemini CLI agents concurrently
-- ⚡ **Real-time Streaming** - WebSocket-based live output streaming
-- 💾 **Persistent Storage** - SQLite database for session history
+- ⚡ **Real-time Streaming** - 100% WebSocket-based event-driven architecture
+- 💾 **Persistent Storage** - SQLite database with FK constraints and message deduplication
 - 🏗️ **Clean Architecture** - 4-layer hexagonal architecture with dependency injection
-- ✅ **Comprehensive Testing** - 270+ tests with high coverage
-- 🎨 **Modern UI** - React frontend with real-time updates
+- ✅ **Comprehensive Testing** - 444+ tests with production-grade coverage (676+ planned)
+- 🎨 **Modern UI** - React + Redux frontend with real-time updates and debug tools
 - 🔌 **Multiple Claude Adapters** - Choose between Python proxy (Max subscription) or SDK (API key)
+- 📊 **AI-Autonomous Development** - Complete test infrastructure for AI agents
 
 ## Quick Start
 
@@ -85,19 +86,49 @@ Access the application at: **http://localhost:5173**
 
 ## Testing
 
+### Backend Tests
 ```bash
 cd backend
-npm test                 # All tests (270+ passing)
+npm test                 # All tests (370 passing, 676+ planned)
 npm run test:watch       # TDD watch mode
 npm run test:coverage    # Coverage report
+npm run test:integration # Integration tests only
+npm run test:e2e         # E2E tests
+npm run test:smoke       # Smoke tests with real CLI
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm test                 # Unit tests (74 passing)
+npm test -- --run        # Run once (no watch)
+npm run test:e2e         # E2E tests (requires backend running)
+npm run test:coverage    # Coverage report
+```
+
+### Full Test Suite
+```bash
+# Run all tests across the system
+npm test  # In backend
+cd ../frontend && npm test -- --run
+cd ../frontend && npm run test:e2e  # With backend running
 ```
 
 ## Documentation
 
+### For AI Agents (Start Here)
+- **[CLAUDE.md](./CLAUDE.md)** - Main AI development guide with testing rules
+- **[docs/testing/](./docs/testing/)** - Complete testing infrastructure (108 pages)
+  - Start with [docs/testing/README.md](./docs/testing/README.md)
+
+### System Documentation
 - [SPECIFICATION.md](./SPECIFICATION.md) - Complete system specification
-- [CLAUDE.md](./CLAUDE.md) - AI development context
 - [docs/architecture.md](./docs/architecture.md) - Architecture details
-- [docs/testing-guide.md](./docs/testing-guide.md) - TDD practices
+- [docs/api-reference.md](./docs/api-reference.md) - API documentation
+- [docs/setup-guide.md](./docs/setup-guide.md) - Setup instructions
+
+### Historical (Archive)
+- [docs/archive/](./docs/archive/) - Historical reports and superseded documentation
 
 ## License
 

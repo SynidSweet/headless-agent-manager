@@ -177,6 +177,25 @@ npm test
 
 ### 1. Test-Driven Development (TDD) - MANDATORY
 
+**📚 COMPREHENSIVE TESTING GUIDE AVAILABLE**: `/docs/testing/`
+
+**For AI Agents**: Read the complete testing infrastructure documentation:
+- **Start Here**: [`/docs/testing/README.md`](/docs/testing/README.md) - Quick start guide
+- **Architecture**: [`/docs/testing/TESTING_ARCHITECTURE_GUIDE.md`](/docs/testing/TESTING_ARCHITECTURE_GUIDE.md) - Philosophy & rules
+- **Plan**: [`/docs/testing/COMPREHENSIVE_TEST_PLAN.md`](/docs/testing/COMPREHENSIVE_TEST_PLAN.md) - All tests to implement
+- **Templates**: [`/docs/testing/TEST_TEMPLATES.md`](/docs/testing/TEST_TEMPLATES.md) - Copy-paste ready code
+- **Helpers**: [`/docs/testing/TEST_HELPER_LIBRARY.md`](/docs/testing/TEST_HELPER_LIBRARY.md) - Utility functions
+
+**The 8 Constitutional Rules for Testing**:
+1. Test First, Always (RED → GREEN → REFACTOR)
+2. Test Behavior, Not Implementation
+3. Test Boundaries with Real Collaborators
+4. Every Layer Boundary Needs Contract Test
+5. Negative Tests Are Mandatory
+6. Integration Tests Use Real Infrastructure
+7. Performance is a Feature
+8. Tests Must Be Self-Contained
+
 **ALL CODE must follow the Red-Green-Refactor cycle:**
 
 ```

@@ -4,6 +4,7 @@ import { useDesignTokens } from './hooks/useDesignTokens';
 import { AgentLaunchForm } from './components/AgentLaunchForm';
 import { AgentList } from './components/AgentList';
 import { AgentOutput } from './components/AgentOutput';
+import { ConnectionStatus } from './components/ConnectionStatus';
 import { actions, selectors } from './store/store';
 import type { AppDispatch, RootState } from './store/store';
 import './App.css';
@@ -17,7 +18,6 @@ function App() {
   const selectedAgentId = useSelector((state: RootState) => state.agents.selectedAgentId);
   const loading = useSelector((state: RootState) => state.agents.loading);
   const error = useSelector((state: RootState) => state.agents.error);
-  const isConnected = useSelector(selectors.selectIsConnected);
 
   // Load agents on mount (initial state only)
   // All subsequent updates come via WebSocket events (event-driven!)
@@ -31,15 +31,10 @@ function App() {
 
   }, [dispatch]);
 
-  const handleAgentLaunched = () => {
-    // No need to fetch - launchAgent.fulfilled already adds agent to Redux
-    // Fetching here causes race condition where new agent gets cleared
-  };
-
   const handleTerminateAgent = async (agentId: string) => {
     try {
       await dispatch(actions.terminateAgent(agentId)).unwrap();
-      await dispatch(actions.fetchAgents());
+      // No need to fetch - agent:deleted WebSocket event will update Redux automatically
     } catch (err) {
       console.error('Failed to terminate agent:', err);
     }
@@ -77,24 +72,7 @@ function App() {
         >
           🤖 Headless AI Agent Manager
         </h1>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: tokens.spacing.sm,
-            fontSize: tokens.typography.fontSize.md,
-          }}
-        >
-          <span
-            style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: isConnected ? tokens.colors.success : tokens.colors.danger,
-            }}
-          />
-          {isConnected ? 'Connected' : 'Disconnected'}
-        </div>
+        <ConnectionStatus compact={true} />
       </header>
 
       {error && (
@@ -130,7 +108,7 @@ function App() {
             overflow: 'auto',
           }}
         >
-          <AgentLaunchForm onAgentLaunched={handleAgentLaunched} />
+          <AgentLaunchForm />
           {loading && agents.length === 0 ? (
             <div
               style={{

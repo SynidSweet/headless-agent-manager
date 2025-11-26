@@ -131,18 +131,16 @@ export class StreamingService {
 
   /**
    * Broadcast agent message to all subscribed clients
-   * CRITICAL: Tries to save to database, but ALWAYS emits to WebSocket (even if DB fails)
-   * This ensures messages reach the frontend even if persistence fails
+   * CRITICAL: Messages MUST be saved to database first to maintain data integrity
+   * FK constraint violations indicate agent doesn't exist - this is a FATAL error
    * @param agentId - The agent ID
    * @param message - The message to broadcast
+   * @throws Error if agent doesn't exist (FK constraint violation)
    */
   async broadcastMessage(agentId: AgentId, message: AgentMessage): Promise<void> {
     console.log('[TRACE] broadcastMessage START', { agentId: agentId.toString(), messageType: message.type });
 
-    let messageToSend: any;
-    let dbError: Error | null = null;
-
-    // 1. TRY to save to database (source of truth, but not required for real-time display)
+    // 1. MUST save to database first (maintains referential integrity)
     try {
       console.log('[TRACE] Attempting DB save...');
       const savedMessage = await this.messageService.saveMessage({
@@ -153,47 +151,48 @@ export class StreamingService {
         metadata: message.metadata,
       });
       console.log('[TRACE] DB save SUCCESS', { messageId: savedMessage.id });
-      messageToSend = savedMessage;
-    } catch (error) {
-      // Database save failed - log error but continue with emission
-      console.error('Failed to save message to database:', error);
-      console.log('[TRACE] DB save FAILED, generating temporary message with ID');
-      dbError = error as Error;
 
-      // Generate temporary message with required fields for frontend
-      // Frontend expects id and sequenceNumber for deduplication/ordering
-      messageToSend = {
-        id: `temp-${Date.now()}-${Math.random().toString(36).substring(7)}`, // Temporary ID
+      // 2. ONLY emit to WebSocket after successful DB save
+      console.log('[TRACE] Emitting agent:message to WebSocket...', { room: `agent:${agentId.toString()}` });
+      this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:message', {
         agentId: agentId.toString(),
-        sequenceNumber: -1, // -1 indicates non-persisted message
-        type: message.type,
-        role: message.role,
-        content: message.content,
-        metadata: message.metadata,
-        createdAt: new Date().toISOString(),
-      };
-    }
-
-    // 2. ALWAYS emit WebSocket event (critical for real-time UX)
-    console.log('[TRACE] Emitting agent:message to WebSocket...', { room: `agent:${agentId.toString()}` });
-    this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:message', {
-      agentId: agentId.toString(),
-      message: messageToSend,
-      timestamp: new Date().toISOString(),
-    });
-    console.log('[TRACE] WebSocket emission COMPLETE');
-
-    // 3. If DB save failed, emit error event to notify frontend
-    if (dbError) {
-      console.log('[TRACE] Emitting agent:error due to DB failure');
-      this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
-        agentId: agentId.toString(),
-        error: {
-          message: `Message persistence failed: ${dbError.message}`,
-          name: dbError.name,
-        },
+        message: savedMessage,
         timestamp: new Date().toISOString(),
       });
+      console.log('[TRACE] WebSocket emission COMPLETE');
+    } catch (error) {
+      const err = error as Error;
+
+      // CRITICAL: FK constraint violations indicate agent doesn't exist
+      // This is a FATAL error that must be propagated, not hidden
+      if (err.message.includes('FOREIGN KEY constraint failed')) {
+        console.error('[ERROR] FK constraint violation - agent does not exist', {
+          agentId: agentId.toString(),
+          error: err.message,
+        });
+
+        // Emit error to frontend (if any clients are subscribed)
+        this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
+          agentId: agentId.toString(),
+          error: {
+            message: `Agent ${agentId.toString()} does not exist`,
+            name: 'AgentNotFoundError',
+          },
+          timestamp: new Date().toISOString(),
+        });
+
+        // MUST propagate the error - caller needs to know agent doesn't exist
+        throw new Error(`Cannot save message: Agent ${agentId.toString()} does not exist (FK constraint violation)`);
+      }
+
+      // For other errors (e.g., database locked), also propagate
+      // Caller should decide retry strategy, not hide the error
+      console.error('[ERROR] Failed to save message to database', {
+        agentId: agentId.toString(),
+        error: err.message,
+      });
+
+      throw error; // Always propagate, never silently swallow
     }
 
     console.log('[TRACE] broadcastMessage END');
@@ -266,9 +265,25 @@ export class StreamingService {
   private createObserver(agentId: AgentId): IAgentObserver {
     return {
       onMessage: (message: AgentMessage) => {
-        // Fire and forget - errors are logged but don't block the observer
+        // Fire and forget for real-time updates
+        // IMPORTANT: FK violations will be logged and emitted as agent:error events
+        // but won't block the agent runner from continuing
         this.broadcastMessage(agentId, message).catch(error => {
-          console.error('Failed to broadcast message:', error);
+          // Log critical errors but don't crash the agent
+          console.error('CRITICAL: Failed to broadcast message - data may be lost', {
+            agentId: agentId.toString(),
+            error: error.message,
+          });
+
+          // Emit error to frontend so users know something went wrong
+          this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
+            agentId: agentId.toString(),
+            error: {
+              message: `Message broadcast failed: ${error.message}`,
+              name: error.name,
+            },
+            timestamp: new Date().toISOString(),
+          });
         });
       },
       onStatusChange: (status: AgentStatus) => {

@@ -211,7 +211,7 @@ describe('StreamingService', () => {
       expect(data.timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     });
 
-    it('should still emit message to WebSocket when database save fails', async () => {
+    it('should throw FK constraint error and NOT emit message', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const message: AgentMessage = {
@@ -219,28 +219,36 @@ describe('StreamingService', () => {
         content: 'Test message',
       };
 
-      // Simulate database failure (FK constraint, etc.)
+      // Simulate FK constraint violation (agent doesn't exist)
       const dbError = new Error('FOREIGN KEY constraint failed');
       mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
 
-      // Act
-      await service.broadcastMessage(agentId, message);
+      // Act & Assert - Should throw error (not swallow it)
+      await expect(service.broadcastMessage(agentId, message))
+        .rejects.toThrow('does not exist (FK constraint violation)');
 
-      // Assert - Message should still be emitted to WebSocket
+      // Assert - Error event should be emitted to notify frontend
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
         `agent:${agentId.toString()}`,
-        'agent:message',
+        'agent:error',
         expect.objectContaining({
           agentId: agentId.toString(),
-          message: expect.objectContaining({
-            type: 'assistant',
-            content: 'Test message',
+          error: expect.objectContaining({
+            message: expect.stringContaining('does not exist'),
+            name: 'AgentNotFoundError',
           }),
         })
       );
+
+      // Assert - Message should NOT be emitted (data integrity preserved)
+      expect(mockWebSocketGateway.emitToRoom).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'agent:message',
+        expect.anything()
+      );
     });
 
-    it('should emit error event when database save fails', async () => {
+    it('should throw error when database save fails (non-FK error)', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const message: AgentMessage = {
@@ -251,20 +259,15 @@ describe('StreamingService', () => {
       const dbError = new Error('Database write failed');
       mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
 
-      // Act
-      await service.broadcastMessage(agentId, message);
+      // Act & Assert - Should throw error (fail-fast principle)
+      await expect(service.broadcastMessage(agentId, message))
+        .rejects.toThrow('Database write failed');
 
-      // Assert - Error should be emitted to client
-      expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
-        `agent:${agentId.toString()}`,
-        'agent:error',
-        expect.objectContaining({
-          agentId: agentId.toString(),
-          error: expect.objectContaining({
-            message: expect.stringContaining('Database write failed'),
-            name: 'Error',
-          }),
-        })
+      // Assert - NO message should be emitted (error occurred first)
+      expect(mockWebSocketGateway.emitToRoom).not.toHaveBeenCalledWith(
+        expect.anything(),
+        'agent:message',
+        expect.anything()
       );
     });
   });

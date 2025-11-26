@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS agent_messages (
   content TEXT NOT NULL,
   metadata TEXT,                     -- JSON serialized metadata
   created_at TEXT NOT NULL,          -- ISO 8601 timestamp
-  FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+  FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE,
+  UNIQUE(agent_id, sequence_number)  -- Ensure no duplicate sequences per agent
 );
 
 -- Indexes for message queries

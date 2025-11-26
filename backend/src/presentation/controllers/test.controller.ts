@@ -70,30 +70,27 @@ export class TestController {
   async launchSyntheticAgent(
     @Body() dto: { prompt: string; schedule: SyntheticEvent[] }
   ): Promise<{ agentId: string; status: string; createdAt: string }> {
-    // Create agent manually (bypass normal launch flow)
+    // Pre-generate agent ID for configuration
     const agentId = AgentId.generate();
+
+    // Configure synthetic adapter with schedule BEFORE creating session
+    // This allows start() to find the configuration
+    this.syntheticAdapter.configure(agentId, {
+      schedule: dto.schedule,
+    });
+
     const session = Session.create(dto.prompt, {
       sessionId: agentId.toString(),
       outputFormat: 'stream-json',
-    });
-
-    // Configure synthetic adapter with schedule
-    this.syntheticAdapter.configure(agentId, {
-      schedule: dto.schedule,
     });
 
     // Create observer and subscribe streaming service
     const observer = this.createObserver(agentId);
     this.syntheticAdapter.subscribe(agentId, observer);
 
-    // Register runner with orchestration service (LSP - synthetic agents work like regular agents)
-    // This allows clients to subscribe to synthetic agents for message events
-    this.orchestrationService.registerRunner(agentId, this.syntheticAdapter);
-
-    // Start synthetic agent (emits events on schedule)
-    await this.syntheticAdapter.start(session, agentId);
-
-    // Save to database (minimal agent record)
+    // **FIX**: Save to database BEFORE starting agent
+    // This ensures the agent record exists when messages start arriving
+    // Prevents FOREIGN KEY constraint failures on agent_messages.agent_id
     const database = this.db.getDatabase();
     database
       .prepare(
@@ -109,41 +106,49 @@ export class TestController {
         new Date().toISOString()
       );
 
+    // Start synthetic agent (emits events on schedule)
+    // Now conforms to IAgentRunner interface - creates and returns Agent
+    const agent = await this.syntheticAdapter.start(session);
+
+    // Register runner with orchestration service (LSP - synthetic agents work like regular agents)
+    // This allows clients to subscribe to synthetic agents for message events
+    this.orchestrationService.registerRunner(agent.id, this.syntheticAdapter);
+
     this.logger.log(
-      `Synthetic agent ${agentId.toString()} launched with ${dto.schedule.length} scheduled events`
+      `Synthetic agent ${agent.id.toString()} launched with ${dto.schedule.length} scheduled events`
     );
 
     // EVENT-DRIVEN: Emit agent:created event to all WebSocket clients
-    this.logger.log(`[DEBUG] About to emit agent:created for ${agentId.toString()}`);
+    this.logger.log(`[DEBUG] About to emit agent:created for ${agent.id.toString()}`);
     this.logger.log(`[DEBUG] Gateway available: ${!!this.gateway}`);
 
     try {
       this.gateway.emitToAll('agent:created', {
         agent: {
-          id: agentId.toString(),
+          id: agent.id.toString(),
           type: 'synthetic',
           status: 'running',
           session: {
-            id: '',
-            prompt: dto.prompt,
+            id: agent.session.id,
+            prompt: agent.session.prompt,
             messageCount: 0
           },
-          createdAt: new Date().toISOString(),
-          startedAt: new Date().toISOString(),
+          createdAt: agent.createdAt.toISOString(),
+          startedAt: agent.startedAt?.toISOString() || null,
           completedAt: null
         },
         timestamp: new Date().toISOString(),
       });
-      this.logger.log(`[DEBUG] ✅ agent:created emitted successfully for ${agentId.toString()}`);
+      this.logger.log(`[DEBUG] ✅ agent:created emitted successfully for ${agent.id.toString()}`);
     } catch (error) {
       this.logger.error(`[DEBUG] ❌ Failed to emit agent:created:`, error);
       throw error;
     }
 
     return {
-      agentId: agentId.toString(),
-      status: 'running',
-      createdAt: new Date().toISOString(),
+      agentId: agent.id.toString(),
+      status: agent.status.toString(),
+      createdAt: agent.createdAt.toISOString(),
     };
   }
 

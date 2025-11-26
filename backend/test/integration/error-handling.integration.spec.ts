@@ -20,6 +20,13 @@ describe('Error Handling & Recovery Integration Tests', () => {
   beforeEach(() => {
     db = new DatabaseService(':memory:');
     db.onModuleInit();
+
+    // Verify FK enabled
+    const fkEnabled = db.getDatabase().pragma('foreign_keys', { simple: true });
+    if (fkEnabled !== 1) {
+      throw new Error('FK constraints must be enabled for error handling tests');
+    }
+
     messageService = new AgentMessageService(db);
   });
 

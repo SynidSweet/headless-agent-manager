@@ -36,9 +36,11 @@ import {
   AgentMessage,
   AgentResult,
 } from '@application/ports/agent-runner.port';
-import { Session } from '@domain/entities/session.entity';
+import { Session } from '@domain/value-objects/session.vo';
+import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
+import { AgentType } from '@domain/value-objects/agent-type.vo';
 
 /**
  * Scheduled event for synthetic agent
@@ -67,6 +69,7 @@ export class SyntheticAgentAdapter implements IAgentRunner {
   private observers: Map<string, IAgentObserver[]> = new Map();
   private timers: Map<string, NodeJS.Timeout[]> = new Map();
   private configs: Map<string, SyntheticAgentConfig> = new Map();
+  private startTime: Map<string, number> = new Map();
 
   /**
    * Configure a synthetic agent with a schedule
@@ -80,30 +83,46 @@ export class SyntheticAgentAdapter implements IAgentRunner {
    * Start synthetic agent
    * Executes scheduled events with precise timing
    */
-  async start(session: Session, agentId?: AgentId): Promise<void> {
-    // AgentId must be passed or derived from session.id
-    const actualAgentId = agentId || AgentId.fromString(session.id || '');
-    const agentKey = actualAgentId.toString();
+  async start(session: Session): Promise<Agent> {
+    // **WORKAROUND**: Check if agent ID is provided in configuration (like Python proxy adapter)
+    // For synthetic agents, can also come from session.id
+    const providedAgentId = (session.configuration as any).agentId || session.id;
+    const agentId = providedAgentId ? AgentId.fromString(providedAgentId) : AgentId.generate();
+    const agentKey = agentId.toString();
 
     const config = this.configs.get(agentKey);
     if (!config) {
-      throw new Error(`Synthetic agent ${agentKey} not configured`);
+      throw new Error(`Synthetic agent ${agentKey} not configured. Call configure() first.`);
     }
 
+    // Create agent entity (matching IAgentRunner interface)
+    // Use the pre-configured agentId to maintain referential integrity
+    const agent = Agent.createWithId(agentId, {
+      type: AgentType.SYNTHETIC,
+      prompt: session.prompt,
+      configuration: session.configuration,
+    });
+
     this.logger.log(`Starting synthetic agent ${agentKey}`);
+
+    // Mark agent as running
+    agent.markAsRunning();
 
     const timers: NodeJS.Timeout[] = [];
     const startTime = Date.now();
 
+    // Store start time for duration calculation
+    this.startTime.set(agentKey, startTime);
+
     // Schedule each event
-    config.schedule.forEach((event, index) => {
+    config.schedule.forEach((event) => {
       const timer = setTimeout(() => {
         const elapsed = Date.now() - startTime;
         this.logger.debug(
           `[T+${elapsed}ms] Synthetic agent ${agentKey} emitting: ${event.type}`
         );
 
-        this.emitEvent(actualAgentId, event);
+        this.emitEvent(agentId, event);
       }, event.delay);
 
       timers.push(timer);
@@ -114,6 +133,8 @@ export class SyntheticAgentAdapter implements IAgentRunner {
     this.logger.log(
       `Synthetic agent ${agentKey} started - ${config.schedule.length} events scheduled`
     );
+
+    return agent;
   }
 
   /**
@@ -132,6 +153,7 @@ export class SyntheticAgentAdapter implements IAgentRunner {
 
     this.observers.delete(agentKey);
     this.configs.delete(agentKey);
+    this.startTime.delete(agentKey);
   }
 
   /**
@@ -146,6 +168,17 @@ export class SyntheticAgentAdapter implements IAgentRunner {
 
     this.observers.get(agentKey)!.push(observer);
     this.logger.debug(`Observer subscribed to synthetic agent ${agentKey}`);
+  }
+
+  /**
+   * Get status of synthetic agent
+   * Returns 'running' if timers active, 'completed' otherwise
+   */
+  async getStatus(agentId: AgentId): Promise<AgentStatus> {
+    const agentKey = agentId.toString();
+    const hasActiveTimers = this.timers.has(agentKey);
+
+    return hasActiveTimers ? AgentStatus.RUNNING : AgentStatus.COMPLETED;
   }
 
   /**
@@ -185,7 +218,16 @@ export class SyntheticAgentAdapter implements IAgentRunner {
             break;
 
           case 'status':
-            const status = AgentStatus.fromString(event.data.status);
+            // Map string status to enum value
+            const statusMap: Record<string, AgentStatus> = {
+              initializing: AgentStatus.INITIALIZING,
+              running: AgentStatus.RUNNING,
+              paused: AgentStatus.PAUSED,
+              completed: AgentStatus.COMPLETED,
+              failed: AgentStatus.FAILED,
+              terminated: AgentStatus.TERMINATED,
+            };
+            const status = statusMap[event.data.status] || AgentStatus.RUNNING;
             observer.onStatusChange(status);
             break;
 
@@ -196,9 +238,9 @@ export class SyntheticAgentAdapter implements IAgentRunner {
 
           case 'complete':
             const result: AgentResult = {
-              success: event.data.success !== false,
-              output: event.data.output || '',
-              error: event.data.error,
+              status: event.data.success !== false ? 'success' : 'failed',
+              duration: Date.now() - this.startTime.get(agentKey)!,
+              messageCount: event.data.messageCount || 0,
               stats: event.data.stats || {},
             };
             observer.onComplete(result);

@@ -19,7 +19,7 @@ import {
   agentUpdated,
   agentDeleted,
 } from '../slices/agentsSlice';
-import { messageReceived, fetchMessagesSince } from '../slices/messagesSlice';
+import { messageReceived, fetchMessages, fetchMessagesSince } from '../slices/messagesSlice';
 import type {
   AgentMessageEvent,
   AgentStatusEvent,
@@ -157,23 +157,27 @@ export function createWebSocketMiddleware(socket: Socket): Middleware {
     return (next) => (action: any) => {
       // Handle actions that require WebSocket communication
 
-      // When agent is selected, subscribe to its messages
+      // When agent is selected, subscribe to its messages AND load history
       if (action.type === 'agents/agentSelected') {
         const agentId = action.payload;
         if (agentId) {
-          console.log(`[WebSocketMiddleware] Subscribing to agent: ${agentId}`);
+          console.log(`[WebSocketMiddleware] Agent selected: ${agentId}`);
+          // Subscribe to WebSocket for real-time messages
           socket.emit('subscribe', { agentId });
           store.dispatch(agentSubscribed(agentId));
+          // Load historical messages from API
+          store.dispatch(fetchMessages(agentId) as any);
         }
       }
 
       // When agent is launched, auto-subscribe
       if (action.type === 'agents/launch/fulfilled') {
-        const agentId = action.payload?.id;
+        const agentId = action.payload?.agentId; // LaunchAgentResponse uses 'agentId'
         if (agentId) {
           console.log(`[WebSocketMiddleware] Auto-subscribing to launched agent: ${agentId}`);
           socket.emit('subscribe', { agentId });
           store.dispatch(agentSubscribed(agentId));
+          // Note: No need to fetchMessages here - new agents have no history yet
         }
       }
 

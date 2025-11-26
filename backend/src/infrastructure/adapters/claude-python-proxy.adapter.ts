@@ -59,12 +59,28 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
    * Start a Claude agent via Python proxy
    */
   async start(session: Session): Promise<Agent> {
-    // Create agent entity
-    const agent = Agent.create({
-      type: AgentType.CLAUDE_CODE,
-      prompt: session.prompt,
-      configuration: session.configuration,
-    });
+    // **WORKAROUND**: Check if agent ID is provided in configuration
+    // If provided, use it instead of creating a new agent
+    const providedAgentId = (session.configuration as any).agentId;
+
+    let agent: Agent;
+    if (providedAgentId) {
+      // Use provided agent ID (orchestration service already created and saved the agent)
+      agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: session.prompt,
+        configuration: session.configuration,
+      });
+      // Override the generated ID with the provided one
+      (agent as any)._id = AgentId.fromString(providedAgentId);
+    } else {
+      // Fallback: Create new agent (old behavior)
+      agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: session.prompt,
+        configuration: session.configuration,
+      });
+    }
 
     // Track running agent
     this.runningAgents.set(agent.id.toString(), {

@@ -1,5 +1,5 @@
-import type { Agent } from '../types/agent.types';
-import { useDesignTokens } from '../hooks/useDesignTokens';
+import type { Agent } from '@/types/agent.types';
+import { useDesignTokens } from '@/hooks/useDesignTokens';
 
 interface AgentListProps {
   agents: Agent[];

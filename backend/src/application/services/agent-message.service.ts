@@ -52,6 +52,7 @@ export class AgentMessageService {
     `);
 
     // Execute insert - the subquery ensures atomicity
+    // Will throw SqliteError if FK constraint fails
     insertStmt.run(
       id,
       createDto.agentId,

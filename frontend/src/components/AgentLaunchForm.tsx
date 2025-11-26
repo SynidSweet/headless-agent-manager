@@ -1,15 +1,11 @@
 import { useState } from 'react';
 import { useDispatch } from 'react-redux';
 import type { AgentType, LaunchAgentRequest } from '@headless-agent-manager/client';
-import { actions } from '../store/store';
-import type { AppDispatch } from '../store/store';
-import { useDesignTokens } from '../hooks/useDesignTokens';
+import { actions } from '@/store/store';
+import type { AppDispatch } from '@/store/store';
+import { useDesignTokens } from '@/hooks/useDesignTokens';
 
-interface AgentLaunchFormProps {
-  onAgentLaunched: () => void;
-}
-
-export function AgentLaunchForm({ onAgentLaunched }: AgentLaunchFormProps) {
+export function AgentLaunchForm() {
   const tokens = useDesignTokens();
   const dispatch = useDispatch<AppDispatch>();
   const [type, setType] = useState<AgentType>('claude-code');
@@ -39,7 +35,8 @@ export function AgentLaunchForm({ onAgentLaunched }: AgentLaunchFormProps) {
 
       await dispatch(actions.launchAgent(request)).unwrap();
       setPrompt('');
-      onAgentLaunched();
+      // Agent automatically added to Redux via launchAgent.fulfilled action
+      // WebSocket subscription automatically started via middleware
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to launch agent');
     } finally {

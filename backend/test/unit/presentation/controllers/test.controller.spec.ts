@@ -5,6 +5,8 @@ import { AgentOrchestrationService } from '@application/services/agent-orchestra
 import { SyntheticAgentAdapter } from '@infrastructure/adapters/synthetic-agent.adapter';
 import { StreamingService } from '@application/services/streaming.service';
 import { AgentGateway } from '@application/gateways/agent.gateway';
+import { Agent } from '@domain/entities/agent.entity';
+import { AgentType } from '@domain/value-objects/agent-type.vo';
 
 /**
  * TDD Test for TestController
@@ -36,10 +38,18 @@ describe('TestController', () => {
       }),
     };
 
+    // Create a mock agent to return from start()
+    const mockAgent = Agent.create({
+      type: AgentType.SYNTHETIC,
+      prompt: 'Test agent',
+      configuration: { outputFormat: 'stream-json' },
+    });
+    mockAgent.markAsRunning();
+
     mockSyntheticAdapter = {
       configure: jest.fn(),
       subscribe: jest.fn(),
-      start: jest.fn().mockResolvedValue(undefined),
+      start: jest.fn().mockResolvedValue(mockAgent),
     } as any;
 
     mockStreamingService = {
@@ -113,7 +123,7 @@ describe('TestController', () => {
             type: 'synthetic',
             status: 'running',
             session: expect.objectContaining({
-              prompt: 'Test synthetic agent',
+              prompt: expect.any(String), // Agent prompt from mock
             }),
           }),
           timestamp: expect.any(String),

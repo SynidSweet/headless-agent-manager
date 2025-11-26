@@ -11,6 +11,7 @@ export interface AgentConfiguration {
   timeout?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
+  agentId?: string; // Workaround: Pass agent ID to runner (TODO: refactor interface)
 }
 
 /**

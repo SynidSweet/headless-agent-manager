@@ -3,7 +3,7 @@ import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
-import { AgentConfiguration } from '@domain/value-objects/session.vo';
+import { AgentConfiguration, Session } from '@domain/value-objects/session.vo';
 import { IAgentFactory } from '@application/ports/agent-factory.port';
 import { IAgentRepository } from '@application/ports/agent-repository.port';
 import { IAgentRunner } from '@application/ports/agent-runner.port';
@@ -60,18 +60,38 @@ export class AgentOrchestrationService {
     // Get appropriate runner from factory
     const runner = this.agentFactory.create(agent.type);
 
-    // **FIX**: Save agent to database BEFORE starting runner
-    // This ensures the agent record exists when messages start arriving
+    // **CRITICAL FIX**: Save agent to database BEFORE starting runner
+    // This ensures agent exists in DB before any messages are emitted
     // Prevents FOREIGN KEY constraint failures on agent_messages.agent_id
     await this.agentRepository.save(agent);
 
-    // Start the agent (messages can now reference existing agent in DB)
-    const startedAgent = await runner.start(agent.session);
+    // **WORKAROUND**: Pass agent ID through session configuration
+    // TODO: Refactor IAgentRunner interface to accept Agent instead of just Session
+    const sessionWithAgentId = Session.create(agent.session.prompt, {
+      ...agent.session.configuration,
+      agentId: agent.id.toString(),  // Add agent ID to configuration
+    });
+
+    // Start runner (will emit messages that reference the saved agent)
+    const startedAgent = await runner.start(sessionWithAgentId);
+
+    // **CRITICAL**: Verify returned agent has same ID as saved agent
+    if (startedAgent.id.toString() !== agent.id.toString()) {
+      this.logger.warn('Runner returned different agent ID!', {
+        expectedId: agent.id.toString(),
+        returnedId: startedAgent.id.toString(),
+      });
+
+      // **FIX**: Use the original saved agent, but copy the status from the started agent
+      // The runner created its own agent (design flaw), but we need to use our saved one
+      agent.markAsRunning();  // Update status to match what runner did
+    }
 
     // Store runner for this agent
-    this.runnerStorage.set(startedAgent.id.toString(), runner);
+    this.runnerStorage.set(agent.id.toString(), runner);
 
-    return startedAgent;
+    // **IMPORTANT**: Return the ORIGINAL agent (the one we saved to DB), not the runner's agent
+    return agent;
   }
 
   /**
