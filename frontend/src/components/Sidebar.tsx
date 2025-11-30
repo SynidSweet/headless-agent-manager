@@ -1,8 +1,5 @@
-import { useState } from 'react';
-import { useDispatch } from 'react-redux';
-import type { Agent, AgentType, LaunchAgentRequest } from '@headless-agent-manager/client';
-import { actions } from '@/store/store';
-import type { AppDispatch } from '@/store/store';
+import type { Agent } from '@headless-agent-manager/client';
+import { AgentLaunchForm } from './AgentLaunchForm';
 
 interface SidebarProps {
   agents: Agent[];
@@ -11,38 +8,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps) {
-  const dispatch = useDispatch<AppDispatch>();
-  const [prompt, setPrompt] = useState('');
-  const [isLaunching, setIsLaunching] = useState(false);
+  // Sort agents by createdAt DESC (newest first) before filtering
+  // This ensures correct order even when status updates come via WebSocket
+  const sortedAgents = [...agents].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
-  const activeAgents = agents.filter(a => a.status === 'running');
-  const historicAgents = agents.filter(a => a.status !== 'running');
-
-  const handleLaunch = async () => {
-    if (!prompt.trim() || isLaunching) return;
-
-    setIsLaunching(true);
-    try {
-      const request: LaunchAgentRequest = {
-        type: 'claude-code' as AgentType,
-        prompt,
-        configuration: { outputFormat: 'stream-json' },
-      };
-      await dispatch(actions.launchAgent(request)).unwrap();
-      setPrompt('');
-    } catch (err) {
-      console.error('Failed to launch agent:', err);
-    } finally {
-      setIsLaunching(false);
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleLaunch();
-    }
-  };
+  const activeAgents = sortedAgents.filter(a => a.status === 'running');
+  const historicAgents = sortedAgents.filter(a => a.status !== 'running');
 
   return (
     <aside className="flex w-80 shrink-0 flex-col border-r border-white/10 bg-background-light dark:bg-background-dark/50">
@@ -58,32 +31,9 @@ export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps
           </div>
         </div>
 
-        {/* Composer */}
+        {/* Launch Form */}
         <div className="mb-6">
-          <div className="flex items-start gap-2">
-            <label className="flex flex-col min-w-40 h-full flex-1">
-              <div className="flex w-full flex-1 flex-col items-stretch rounded-lg h-full border border-gray-200 dark:border-[#3b3f54] bg-white dark:bg-[#1b1d27]">
-                <textarea
-                  className="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-t-lg bg-transparent text-black dark:text-white focus:outline-none focus:ring-0 h-24 placeholder:text-gray-500 dark:placeholder:text-[#545a78] text-sm font-normal leading-normal p-3 font-display"
-                  placeholder="Enter your prompt to start a new agent..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={isLaunching}
-                />
-                <div className="flex justify-end border-t border-gray-200 dark:border-[#3b3f54] p-2">
-                  <button
-                    onClick={handleLaunch}
-                    disabled={isLaunching || !prompt.trim()}
-                    className="flex min-w-[84px] cursor-pointer items-center justify-center gap-2 overflow-hidden rounded-md h-8 px-3 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <span className="material-symbols-outlined !text-[18px]">auto_awesome</span>
-                    <span className="truncate">{isLaunching ? 'Starting...' : 'Start Agent'}</span>
-                  </button>
-                </div>
-              </div>
-            </label>
-          </div>
+          <AgentLaunchForm />
         </div>
 
         {/* Active Agents List */}

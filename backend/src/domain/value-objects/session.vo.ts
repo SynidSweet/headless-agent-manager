@@ -11,7 +11,10 @@ export interface AgentConfiguration {
   timeout?: number;
   allowedTools?: string[];
   disallowedTools?: string[];
+  instructions?: string; // Custom instructions to temporarily replace CLAUDE.md files
+  metadata?: Record<string, unknown>; // Additional metadata for tracking/context
   agentId?: string; // Workaround: Pass agent ID to runner (TODO: refactor interface)
+  workingDirectory?: string; // Working directory for the agent process
 }
 
 /**

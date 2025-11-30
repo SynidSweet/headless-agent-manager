@@ -1,7 +1,10 @@
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
+import { StreamingService } from '@application/services/streaming.service';
 import { IAgentFactory } from '@application/ports/agent-factory.port';
 import { IAgentRepository } from '@application/ports/agent-repository.port';
 import { IAgentRunner } from '@application/ports/agent-runner.port';
+import { IAgentLaunchQueue } from '@application/ports/agent-launch-queue.port';
+import { IInstructionHandler } from '@application/ports/instruction-handler.port';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
@@ -13,6 +16,9 @@ describe('AgentOrchestrationService', () => {
   let mockAgentFactory: jest.Mocked<IAgentFactory>;
   let mockAgentRepository: jest.Mocked<IAgentRepository>;
   let mockAgentRunner: jest.Mocked<IAgentRunner>;
+  let mockStreamingService: jest.Mocked<StreamingService>;
+  let mockLaunchQueue: jest.Mocked<IAgentLaunchQueue>;
+  let mockInstructionHandler: jest.Mocked<IInstructionHandler>;
 
   beforeEach(() => {
     // Create mock agent runner
@@ -40,12 +46,38 @@ describe('AgentOrchestrationService', () => {
       exists: jest.fn(),
     };
 
+    // Create mock streaming service
+    mockStreamingService = {
+      subscribeToAgent: jest.fn(),
+      unsubscribeFromAgent: jest.fn(),
+      unsubscribeClient: jest.fn(),
+    } as any;
+
+    // Create mock launch queue
+    mockLaunchQueue = {
+      enqueue: jest.fn(),
+      getQueueLength: jest.fn().mockReturnValue(0),
+      cancelRequest: jest.fn(),
+    };
+
+    // Create mock instruction handler
+    mockInstructionHandler = {
+      prepareEnvironment: jest.fn().mockResolvedValue(null),
+      restoreEnvironment: jest.fn().mockResolvedValue(undefined),
+    };
+
     // Create service with mocks
-    service = new AgentOrchestrationService(mockAgentFactory, mockAgentRepository);
+    service = new AgentOrchestrationService(
+      mockAgentFactory,
+      mockAgentRepository,
+      mockStreamingService,
+      mockLaunchQueue,
+      mockInstructionHandler,
+    );
   });
 
   describe('launchAgent', () => {
-    it('should create and launch an agent successfully', async () => {
+    it('should enqueue launch request via queue', async () => {
       // Arrange
       const dto = new LaunchAgentDto();
       dto.type = 'claude-code';
@@ -59,96 +91,87 @@ describe('AgentOrchestrationService', () => {
       });
       mockAgent.markAsRunning();
 
-      mockAgentRunner.start.mockResolvedValue(mockAgent);
+      // Mock queue to return agent
+      mockLaunchQueue.enqueue.mockResolvedValue(mockAgent);
 
       // Act
       const result = await service.launchAgent(dto);
 
       // Assert
-      expect(result).toBeDefined();
+      expect(result).toBe(mockAgent);
       expect(result.type).toBe(AgentType.CLAUDE_CODE);
-      expect(result.status).toBe(AgentStatus.RUNNING); // After start(), should be running
-      expect(mockAgentFactory.create).toHaveBeenCalledWith(AgentType.CLAUDE_CODE);
-      expect(mockAgentRunner.start).toHaveBeenCalled();
-      expect(mockAgentRepository.save).toHaveBeenCalledTimes(1);
+      expect(result.status).toBe(AgentStatus.RUNNING);
+
+      // Verify queue was called
+      expect(mockLaunchQueue.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: AgentType.CLAUDE_CODE,
+          prompt: 'Test prompt',
+        })
+      );
+
+      // Direct operations should NOT be called (queue handles those)
+      expect(mockAgentFactory.create).not.toHaveBeenCalled();
+      expect(mockAgentRunner.start).not.toHaveBeenCalled();
+      expect(mockAgentRepository.save).not.toHaveBeenCalled();
     });
 
-    it('should validate DTO before launching', async () => {
-      // Arrange
-      const dto = new LaunchAgentDto();
-      dto.type = ''; // Invalid
-      dto.prompt = 'Test prompt';
-
-      // Act & Assert
-      await expect(service.launchAgent(dto)).rejects.toThrow('Agent type is required');
-    });
-
-    it('should create agent entity with correct data', async () => {
+    it('should pass instructions to queue when provided', async () => {
       // Arrange
       const dto = new LaunchAgentDto();
       dto.type = 'claude-code';
       dto.prompt = 'Test prompt';
       dto.configuration = {
-        sessionId: 'test-session',
-        outputFormat: 'stream-json',
+        instructions: 'Custom instructions for this agent',
       };
 
       const mockAgent = Agent.create({
         type: AgentType.CLAUDE_CODE,
         prompt: 'Test prompt',
-        configuration: {
-          sessionId: 'test-session',
-          outputFormat: 'stream-json',
-        },
+        configuration: {},
       });
-      mockAgent.markAsRunning();
 
-      mockAgentRunner.start.mockResolvedValue(mockAgent);
-
-      // Act
-      const result = await service.launchAgent(dto);
-
-      // Assert
-      expect(result.session?.id).toBe('test-session');
-      expect(result.session?.prompt).toBe('Test prompt');
-    });
-
-    it('should handle runner start failure', async () => {
-      // Arrange
-      const dto = new LaunchAgentDto();
-      dto.type = 'claude-code';
-      dto.prompt = 'Test prompt';
-
-      const error = new Error('Failed to start CLI');
-      mockAgentRunner.start.mockRejectedValue(error);
-
-      // Act & Assert
-      await expect(service.launchAgent(dto)).rejects.toThrow('Failed to start CLI');
-    });
-
-    it('should pass configuration to agent factory', async () => {
-      // Arrange
-      const dto = new LaunchAgentDto();
-      dto.type = 'gemini-cli';
-      dto.prompt = 'Test prompt';
-      dto.configuration = {
-        customArgs: ['--yolo'],
-      };
-
-      const mockAgent = Agent.create({
-        type: AgentType.GEMINI_CLI,
-        prompt: 'Test prompt',
-        configuration: { customArgs: ['--yolo'] },
-      });
-      mockAgent.markAsRunning();
-
-      mockAgentRunner.start.mockResolvedValue(mockAgent);
+      mockLaunchQueue.enqueue.mockResolvedValue(mockAgent);
 
       // Act
       await service.launchAgent(dto);
 
       // Assert
-      expect(mockAgentFactory.create).toHaveBeenCalledWith(AgentType.GEMINI_CLI);
+      expect(mockLaunchQueue.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: AgentType.CLAUDE_CODE,
+          prompt: 'Test prompt',
+          instructions: 'Custom instructions for this agent',
+        })
+      );
+    });
+
+    it('should pass metadata to queue when provided', async () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        metadata: { userId: 'user-123', projectId: 'project-456' },
+      };
+
+      const mockAgent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {},
+      });
+
+      mockLaunchQueue.enqueue.mockResolvedValue(mockAgent);
+
+      // Act
+      await service.launchAgent(dto);
+
+      // Assert
+      expect(mockLaunchQueue.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: { userId: 'user-123', projectId: 'project-456' },
+        })
+      );
     });
   });
 
@@ -341,25 +364,15 @@ describe('AgentOrchestrationService', () => {
   });
 
   describe('getRunnerForAgent', () => {
-    it('should return runner for launched agent', async () => {
+    it('should return runner for registered agent', () => {
       // Arrange
-      const dto = new LaunchAgentDto();
-      dto.type = 'claude-code';
-      dto.prompt = 'Test prompt';
-      dto.configuration = {};
+      const agentId = AgentId.generate();
 
-      const mockAgent = Agent.create({
-        type: AgentType.CLAUDE_CODE,
-        prompt: 'Test prompt',
-        configuration: {},
-      });
-      mockAgent.markAsRunning();
-
-      mockAgentRunner.start.mockResolvedValue(mockAgent);
+      // Manually register runner (simulates what launchAgentDirect does)
+      service.registerRunner(agentId, mockAgentRunner);
 
       // Act
-      const agent = await service.launchAgent(dto);
-      const runner = service.getRunnerForAgent(agent.id);
+      const runner = service.getRunnerForAgent(agentId);
 
       // Assert
       expect(runner).toBeDefined();
@@ -376,30 +389,39 @@ describe('AgentOrchestrationService', () => {
       );
     });
 
-    it('should return same runner instance across multiple calls', async () => {
+    it('should return same runner instance across multiple calls', () => {
       // Arrange
-      const dto = new LaunchAgentDto();
-      dto.type = 'claude-code';
-      dto.prompt = 'Test prompt';
-      dto.configuration = {};
+      const agentId = AgentId.generate();
 
-      const mockAgent = Agent.create({
-        type: AgentType.CLAUDE_CODE,
-        prompt: 'Test prompt',
-        configuration: {},
-      });
-      mockAgent.markAsRunning();
-
-      mockAgentRunner.start.mockResolvedValue(mockAgent);
+      // Manually register runner
+      service.registerRunner(agentId, mockAgentRunner);
 
       // Act
-      const agent = await service.launchAgent(dto);
-      const runner1 = service.getRunnerForAgent(agent.id);
-      const runner2 = service.getRunnerForAgent(agent.id);
+      const runner1 = service.getRunnerForAgent(agentId);
+      const runner2 = service.getRunnerForAgent(agentId);
 
       // Assert
       expect(runner1).toBe(runner2);
       expect(runner1).toBe(mockAgentRunner);
+    });
+  });
+
+  describe('queue management', () => {
+    it('should return queue length', () => {
+      mockLaunchQueue.getQueueLength.mockReturnValue(5);
+
+      const length = service.getQueueLength();
+
+      expect(length).toBe(5);
+      expect(mockLaunchQueue.getQueueLength).toHaveBeenCalled();
+    });
+
+    it('should cancel launch request', () => {
+      const requestId = 'test-request-id';
+
+      service.cancelLaunchRequest(requestId);
+
+      expect(mockLaunchQueue.cancelRequest).toHaveBeenCalledWith(requestId);
     });
   });
 });

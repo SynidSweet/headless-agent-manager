@@ -22,16 +22,65 @@ export class ClaudeMessageParser {
   /**
    * Parse a single JSONL line from Claude Code output
    * @param line - JSON string line
-   * @returns Parsed agent message
-   * @throws Error if line is invalid
+   * @returns Parsed agent message or null if event should be skipped
+   * @throws Error if line is invalid JSON
    */
-  parse(line: string): AgentMessage {
+  parse(line: string): AgentMessage | null {
     // Parse JSON
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(line) as Record<string, unknown>;
     } catch (error) {
       throw new Error(`Invalid JSON: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+
+    // **NEW FORMAT SUPPORT**: Handle stream_event wrapper from Claude CLI
+    // Format: {"type":"stream_event","event":{"type":"message_start",...}}
+    if (parsed.type === 'stream_event' && parsed.event) {
+      const event = parsed.event as Record<string, unknown>;
+      const eventType = event.type as string;
+
+      // Skip these streaming events - they don't contain displayable content
+      // Return null instead of throwing to avoid polluting error logs
+      if (['message_start', 'content_block_start', 'content_block_stop', 'message_stop'].includes(eventType)) {
+        return null;
+      }
+
+      // Handle content_block_delta - this contains the actual text
+      if (eventType === 'content_block_delta') {
+        const delta = event.delta as Record<string, unknown>;
+        if (delta.type === 'text_delta' && delta.text) {
+          return {
+            type: 'assistant',
+            role: 'assistant',
+            content: delta.text as string,
+            raw: line,
+            metadata: { eventType: 'content_delta' },
+          };
+        }
+      }
+
+      // Handle message_delta - contains usage stats
+      if (eventType === 'message_delta') {
+        const delta = event.delta as Record<string, unknown>;
+        const usage = event.usage as Record<string, unknown> | undefined;
+        return {
+          type: 'system',
+          role: 'system',
+          content: '',
+          raw: line,
+          metadata: {
+            eventType: 'message_delta',
+            delta,
+            usage,
+          },
+        };
+      }
+
+      // Unwrap other events and continue parsing
+      if (event.type) {
+        parsed = event;
+      }
     }
 
     // Validate required fields

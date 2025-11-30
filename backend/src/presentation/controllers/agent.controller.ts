@@ -148,10 +148,18 @@ export class AgentController {
     @Param('id') id: string,
     @Query('since') since?: string
   ): Promise<AgentMessageDto[]> {
+    const fs = require('fs');
+    const logFile = '/tmp/controller-debug.log';
+    const log = (msg: string) => fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
+
+    log(`START: getAgentMessages(${id}, since=${since})`);
     try {
       // Validate agent ID exists
       const agentId = AgentId.fromString(id);
+      log(`Agent ID parsed: ${agentId.toString()}`);
+
       await this.orchestrationService.getAgentById(agentId);
+      log('Agent exists in database');
 
       // Get messages
       if (since) {
@@ -159,10 +167,14 @@ export class AgentController {
         if (isNaN(sinceSeq) || sinceSeq < 0) {
           throw new BadRequestException('Invalid since parameter - must be a positive number');
         }
+        log('Calling findByAgentIdSince');
         return await this.messageService.findByAgentIdSince(id, sinceSeq);
       }
 
-      return await this.messageService.findByAgentId(id);
+      log('About to call findByAgentId');
+      const result = await this.messageService.findByAgentId(id);
+      log(`findByAgentId returned: ${result.length} messages`);
+      return result;
     } catch (error) {
       if (error instanceof Error) {
         if (error.message.includes('Invalid UUID')) {
@@ -226,5 +238,32 @@ export class AgentController {
       }
       throw error;
     }
+  }
+
+  /**
+   * Get queue status
+   * GET /agents/queue
+   *
+   * Returns the current number of pending launch requests in the queue.
+   * Useful for monitoring and UI feedback.
+   */
+  @Get('queue')
+  getQueueStatus(): { queueLength: number } {
+    return {
+      queueLength: this.orchestrationService.getQueueLength(),
+    };
+  }
+
+  /**
+   * Cancel a pending launch request
+   * DELETE /agents/queue/:requestId
+   *
+   * Cancels a launch request that is pending in the queue.
+   * Has no effect if the request is already processing or completed.
+   */
+  @Delete('queue/:requestId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  cancelQueuedRequest(@Param('requestId') requestId: string): void {
+    this.orchestrationService.cancelLaunchRequest(requestId);
   }
 }

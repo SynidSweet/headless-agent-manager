@@ -37,6 +37,7 @@ class StartAgentRequest(BaseModel):
     prompt: str
     session_id: Optional[str] = None
     model: Optional[str] = None
+    working_directory: Optional[str] = None
 
 
 class StartAgentResponse(BaseModel):
@@ -80,6 +81,8 @@ async def start_agent(request: StartAgentRequest) -> StartAgentResponse:
             options["session_id"] = request.session_id
         if request.model:
             options["model"] = request.model
+        if request.working_directory:
+            options["working_directory"] = request.working_directory
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)
@@ -110,6 +113,8 @@ async def stream_agent(request: StartAgentRequest) -> StreamingResponse:
             options["session_id"] = request.session_id
         if request.model:
             options["model"] = request.model
+        if request.working_directory:
+            options["working_directory"] = request.working_directory
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)

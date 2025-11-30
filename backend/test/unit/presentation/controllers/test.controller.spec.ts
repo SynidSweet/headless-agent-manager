@@ -57,6 +57,7 @@ describe('TestController', () => {
       broadcastStatusChange: jest.fn(),
       broadcastError: jest.fn(),
       broadcastComplete: jest.fn(),
+      subscribeToAgent: jest.fn(), // **FIX**: Added missing method that TestController now calls
     } as any;
 
     const mockOrchestrationService = {
@@ -174,7 +175,9 @@ describe('TestController', () => {
 
       // Assert
       expect(mockSyntheticAdapter.configure).toHaveBeenCalled();
-      expect(mockSyntheticAdapter.subscribe).toHaveBeenCalled();
+      // **UPDATED**: TestController no longer subscribes directly - it delegates to StreamingService
+      // expect(mockSyntheticAdapter.subscribe).toHaveBeenCalled(); // OLD BEHAVIOR (caused duplicate subscriptions!)
+      expect(mockStreamingService.subscribeToAgent).toHaveBeenCalled(); // NEW BEHAVIOR (single subscription via StreamingService)
       expect(mockSyntheticAdapter.start).toHaveBeenCalled();
     });
 

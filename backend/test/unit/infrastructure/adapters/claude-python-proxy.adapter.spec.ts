@@ -94,6 +94,46 @@ describe('ClaudePythonProxyAdapter', () => {
       expect(callBody.session_id).toBe('session-123');
     });
 
+    it('should include working directory in request', async () => {
+      const session = Session.create('test', { workingDirectory: '/home/user/my-project' });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.working_directory).toBe('/home/user/my-project');
+    });
+
+    it('should handle relative working directory in request', async () => {
+      const session = Session.create('test', { workingDirectory: './my-project' });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.working_directory).toBe('./my-project');
+    });
+
     it('should notify observers on proxy error', async () => {
       const session = Session.create('test', {});
 

@@ -2,6 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 import { IWebSocketGateway } from '@application/ports/websocket-gateway.port';
+import { IAgentRepository } from '@application/ports/agent-repository.port';
 import {
   IAgentRunner,
   IAgentObserver,
@@ -25,6 +26,9 @@ interface AgentSubscription {
  * Streaming Service
  * Manages real-time streaming of agent output to WebSocket clients
  * Implements observer pattern to receive agent events and broadcast to clients
+ *
+ * **CRITICAL**: Also persists agent status changes to database
+ * This ensures status transitions (RUNNING -> COMPLETED/FAILED) are saved
  */
 @Injectable()
 export class StreamingService {
@@ -33,6 +37,7 @@ export class StreamingService {
 
   constructor(
     @Inject('IWebSocketGateway') private readonly websocketGateway: IWebSocketGateway,
+    @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository,
     private readonly messageService: AgentMessageService
   ) {}
 
@@ -233,8 +238,29 @@ export class StreamingService {
    * Broadcast error to all subscribed clients
    * @param agentId - The agent ID
    * @param error - The error
+   *
+   * **CRITICAL FIX**: Also persists FAILED status to database
+   * Without this, agents fail in-memory but stay "running" in DB
    */
-  broadcastError(agentId: AgentId, error: Error): void {
+  async broadcastError(agentId: AgentId, error: Error): Promise<void> {
+    // 1. Persist failure to database FIRST
+    try {
+      const agent = await this.agentRepository.findById(agentId);
+      if (agent) {
+        agent.markAsFailed(error);
+        await this.agentRepository.save(agent);
+        console.log('[StreamingService] Agent failure persisted to DB:', agentId.toString());
+      } else {
+        console.warn('[StreamingService] Agent not found for error:', agentId.toString());
+      }
+    } catch (dbError) {
+      console.error('[StreamingService] Failed to persist agent failure:', {
+        agentId: agentId.toString(),
+        error: dbError instanceof Error ? dbError.message : 'Unknown',
+      });
+    }
+
+    // 2. THEN broadcast to WebSocket clients
     this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
       agentId: agentId.toString(),
       error: {
@@ -243,17 +269,52 @@ export class StreamingService {
       },
       timestamp: new Date().toISOString(),
     });
+
+    // 3. Also emit status update to ALL clients (for agent list)
+    this.websocketGateway.emitToAll('agent:updated', {
+      agentId: agentId.toString(),
+      status: 'failed',
+      timestamp: new Date().toISOString(),
+    });
   }
 
   /**
    * Broadcast completion to all subscribed clients
    * @param agentId - The agent ID
    * @param result - The completion result
+   *
+   * **CRITICAL FIX**: Also persists COMPLETED status to database
+   * Without this, agents complete in-memory but stay "running" in DB
    */
-  broadcastComplete(agentId: AgentId, result: AgentResult): void {
+  async broadcastComplete(agentId: AgentId, result: AgentResult): Promise<void> {
+    // 1. Persist completion to database FIRST
+    try {
+      const agent = await this.agentRepository.findById(agentId);
+      if (agent) {
+        agent.markAsCompleted();
+        await this.agentRepository.save(agent);
+        console.log('[StreamingService] Agent completion persisted to DB:', agentId.toString());
+      } else {
+        console.warn('[StreamingService] Agent not found for completion:', agentId.toString());
+      }
+    } catch (error) {
+      console.error('[StreamingService] Failed to persist agent completion:', {
+        agentId: agentId.toString(),
+        error: error instanceof Error ? error.message : 'Unknown',
+      });
+    }
+
+    // 2. THEN broadcast to WebSocket clients
     this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:complete', {
       agentId: agentId.toString(),
       result,
+      timestamp: new Date().toISOString(),
+    });
+
+    // 3. Also emit status update to ALL clients (for agent list)
+    this.websocketGateway.emitToAll('agent:updated', {
+      agentId: agentId.toString(),
+      status: 'completed',
       timestamp: new Date().toISOString(),
     });
   }

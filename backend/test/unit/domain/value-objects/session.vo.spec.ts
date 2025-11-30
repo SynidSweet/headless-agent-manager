@@ -104,6 +104,26 @@ describe('Session Value Object', () => {
       expect(session.configuration.disallowedTools).toEqual(['web-search', 'web-fetch']);
     });
 
+    it('should support workingDirectory configuration', () => {
+      const config: AgentConfiguration = {
+        workingDirectory: '/home/user/projects/my-app',
+      };
+
+      const session = Session.create('test', config);
+
+      expect(session.configuration.workingDirectory).toBe('/home/user/projects/my-app');
+    });
+
+    it('should support relative workingDirectory configuration', () => {
+      const config: AgentConfiguration = {
+        workingDirectory: './my-project',
+      };
+
+      const session = Session.create('test', config);
+
+      expect(session.configuration.workingDirectory).toBe('./my-project');
+    });
+
     it('should support multiple configuration options together', () => {
       const config: AgentConfiguration = {
         sessionId: 'resume-123',
@@ -111,6 +131,7 @@ describe('Session Value Object', () => {
         customArgs: ['--yolo'],
         timeout: 120000,
         allowedTools: ['read', 'write'],
+        workingDirectory: '/tmp/test-project',
       };
 
       const session = Session.create('test', config);

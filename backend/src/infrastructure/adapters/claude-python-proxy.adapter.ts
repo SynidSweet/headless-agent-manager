@@ -209,6 +209,10 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
         requestBody.session_id = session.configuration.sessionId;
       }
 
+      if (session.configuration.workingDirectory) {
+        requestBody.working_directory = session.configuration.workingDirectory;
+      }
+
       // Call Python proxy stream endpoint
       const response = await fetch(`${this.proxyUrl}/agent/stream`, {
         method: 'POST',
@@ -290,6 +294,13 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
             // Regular message - parse from Claude CLI format to AgentMessage format
             try {
               const message = this.parser.parse(data);
+
+              // Parser returns null for skippable events (message_start, etc.)
+              if (message === null) {
+                // Silently skip - these are streaming metadata events with no content
+                continue;
+              }
+
               messageCount++;
 
               this.logger.debug('Proxy message received', {

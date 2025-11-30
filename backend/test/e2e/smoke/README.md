@@ -65,18 +65,21 @@ npm run test:smoke
 
 Expected output:
 ```
-PASS test/e2e/smoke/python-proxy.smoke.spec.ts (60s)
+PASS test/e2e/smoke/python-proxy.smoke.spec.ts (67.8s)
   Python Proxy Smoke Tests (REAL)
-    ✓ should verify Python proxy service is healthy (250ms)
-    ✓ should verify Claude CLI is authenticated (180ms)
-    ✓ should launch real Claude agent and receive streaming output (18450ms)
-    ✓ should terminate running Claude agent (8230ms)
-    ✓ should receive multiple messages from real Claude agent (22180ms)
-    ✓ should handle errors from real Claude CLI gracefully (5120ms)
+    ✓ should verify Python proxy service is healthy (45ms)
+    ✓ should verify Claude CLI is authenticated (52ms)
+    ✓ should launch real Claude agent and complete successfully (18542ms)
+    ✓ should terminate running Claude agent (5123ms)
+    ✓ should process real Claude agent within reasonable time (16891ms)
+    ✓ should handle errors from real Claude CLI gracefully (6234ms)
+    ✓ should stream messages in real-time from real Claude agent (21456ms)
+    ✓ should persist messages to database after agent completes (22178ms)
+    ✓ should stream individual tokens from real Claude agent (16789ms)
 
 Test Suites: 1 passed, 1 total
-Tests:       6 passed, 6 total
-Time:        60.18s
+Tests:       9 passed, 9 total
+Time:        67.842s
 ```
 
 ### Run Specific Test
@@ -111,48 +114,75 @@ This separation ensures:
 ## Test Suite Breakdown
 
 ### Test 1: Python Proxy Health Check
-**Duration**: ~250ms
+**Duration**: ~45ms
 **Purpose**: Verify Python proxy service is running and healthy
 **What it tests**: HTTP health endpoint, service availability
 
 ### Test 2: Claude CLI Authentication
-**Duration**: ~180ms
+**Duration**: ~52ms
 **Purpose**: Verify Claude CLI is authenticated
 **What it tests**: Authentication status via proxy
 
 ### Test 3: Launch Real Claude Agent ⭐ CRITICAL
-**Duration**: ~15-20 seconds
+**Duration**: ~18 seconds
 **Purpose**: Full end-to-end smoke test with real Claude CLI
 **What it tests**:
 - Agent launches via API
 - Python proxy spawns real Claude CLI
-- Streaming messages arrive in real-time
-- Message format matches expected structure
 - Agent completes successfully
+- Status endpoint works correctly
 
 ### Test 4: Terminate Running Agent
-**Duration**: ~8 seconds
+**Duration**: ~5 seconds
 **Purpose**: Verify agent termination works with real processes
 **What it tests**:
 - Termination signal sent to Python proxy
 - Claude CLI process is killed
 - Resources are cleaned up properly
 
-### Test 5: Multiple Message Streaming
-**Duration**: ~20 seconds
-**Purpose**: Verify we can receive multiple messages from Claude
+### Test 5: Agent Processing Time
+**Duration**: ~17 seconds
+**Purpose**: Verify agent processes within reasonable time
 **What it tests**:
-- Multi-message prompts work correctly
-- Message ordering is preserved
-- All messages are received
+- Agent responds to simple prompts quickly
+- Processing time is acceptable
+- No hanging or timeout issues
 
 ### Test 6: Error Handling
-**Duration**: ~5 seconds
+**Duration**: ~6 seconds
 **Purpose**: Verify graceful error handling
 **What it tests**:
 - Invalid prompts are handled
 - Errors don't crash the system
 - Proper error responses returned
+
+### Test 7: Real-Time Message Streaming ⭐ NEW
+**Duration**: ~21 seconds
+**Purpose**: Verify messages stream in real-time from Claude CLI
+**What it tests**:
+- Messages arrive via streaming
+- API endpoint returns messages
+- Assistant messages are present
+- Real-time delivery works
+
+### Test 8: Message Persistence ⭐ NEW CRITICAL
+**Duration**: ~22 seconds
+**Purpose**: Verify messages persist to database after completion
+**What it tests**:
+- Messages saved to database
+- Database is single source of truth
+- API and database match
+- Message structure correct
+- Messages survive agent completion
+
+### Test 9: Token Streaming ⭐ NEW
+**Duration**: ~17 seconds
+**Purpose**: Verify individual token streaming (not just complete messages)
+**What it tests**:
+- Token-level streaming works
+- Multiple messages received incrementally
+- Sequence numbers are sequential
+- No gaps or duplicates
 
 ## Cost Considerations
 
@@ -162,9 +192,10 @@ Smoke tests use the **Python proxy adapter** which utilizes your Claude Max subs
 - No per-token API costs
 - Uses Claude Max 20x quota (200-800 prompts per 5 hours)
 - Simple prompts consume minimal quota
+- 9 tests = minimal quota usage
 
 If you switch to the SDK adapter for smoke tests:
-- Cost: ~$0.08 per test run (6 tests × ~$0.013 avg)
+- Cost: ~$0.12 per test run (9 tests × ~$0.013 avg)
 - Uses Anthropic API key instead of Max subscription
 
 ## Troubleshooting
@@ -361,8 +392,23 @@ npm run test:smoke -- --verbose > smoke-test-output.log
 - **Testing Guide**: `/docs/testing-guide.md` (if exists)
 - **E2E Testing Guide**: `/E2E_TESTING_GUIDE.md`
 
+## New Tests (November 2025)
+
+Three new tests added to validate message streaming and persistence:
+
+**Why These Tests Are Critical**:
+- Validate database is single source of truth
+- Confirm messages persist after agent completion
+- Verify token-level streaming works correctly
+- Test sequence number integrity
+- Ensure no message loss or duplication
+
+**Additional Documentation**:
+- `/backend/SMOKE_TEST_REPORT.md` - Detailed implementation report
+- `/backend/SMOKE_TEST_MESSAGE_PERSISTENCE_UPDATE.md` - Implementation guide
+
 ---
 
-**Last Updated**: 2025-11-10
-**Test Suite Version**: 1.0.0
+**Last Updated**: 2025-11-28
+**Test Suite Version**: 2.0.0 (9 tests)
 **Status**: Production Ready

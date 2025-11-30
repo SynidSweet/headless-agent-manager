@@ -43,6 +43,7 @@ export interface AgentConfiguration {
   sessionId?: string;
   outputFormat?: 'stream-json' | 'json';
   customArgs?: string[];
+  workingDirectory?: string;
 }
 
 /**

@@ -158,6 +158,7 @@ export class SyntheticAgentAdapter implements IAgentRunner {
 
   /**
    * Subscribe to synthetic agent events
+   * **FIX**: Deduplicate observers - don't subscribe same observer twice
    */
   subscribe(agentId: AgentId, observer: IAgentObserver): void {
     const agentKey = agentId.toString();
@@ -166,7 +167,15 @@ export class SyntheticAgentAdapter implements IAgentRunner {
       this.observers.set(agentKey, []);
     }
 
-    this.observers.get(agentKey)!.push(observer);
+    const observers = this.observers.get(agentKey)!;
+
+    // **BUG FIX**: Check if observer already subscribed (prevent duplicates)
+    if (observers.includes(observer)) {
+      this.logger.debug(`Observer already subscribed to synthetic agent ${agentKey} - skipping duplicate`);
+      return;
+    }
+
+    observers.push(observer);
     this.logger.debug(`Observer subscribed to synthetic agent ${agentKey}`);
   }
 

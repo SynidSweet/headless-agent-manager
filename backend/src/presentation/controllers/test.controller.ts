@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { DatabaseService } from '@infrastructure/database/database.service';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import { SyntheticAgentAdapter, SyntheticEvent } from '@infrastructure/adapters/synthetic-agent.adapter';
@@ -39,6 +39,28 @@ export class TestController {
     database.prepare('DELETE FROM agents').run();
 
     console.log('[TestController] Database reset - all agents deleted');
+  }
+
+  /**
+   * Debug: Query messages directly using backend's database connection
+   * GET /test/debug-messages
+   */
+  @Get('debug-messages')
+  debugMessages(): any {
+    const database = this.db.getDatabase();
+
+    // Force WAL checkpoint before reading
+    database.pragma('wal_checkpoint(FULL)');
+
+    const totalCount = database.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as { c: number };
+    const messages = database.prepare('SELECT id, agent_id, sequence_number, type, substr(content, 1, 40) as content FROM agent_messages LIMIT 10').all();
+
+    return {
+      totalCount: totalCount.c,
+      inTransaction: database.inTransaction,
+      messages,
+      walCheckpoint: 'FULL',
+    };
   }
 
   /**
@@ -84,10 +106,6 @@ export class TestController {
       outputFormat: 'stream-json',
     });
 
-    // Create observer and subscribe streaming service
-    const observer = this.createObserver(agentId);
-    this.syntheticAdapter.subscribe(agentId, observer);
-
     // **FIX**: Save to database BEFORE starting agent
     // This ensures the agent record exists when messages start arriving
     // Prevents FOREIGN KEY constraint failures on agent_messages.agent_id
@@ -113,6 +131,12 @@ export class TestController {
     // Register runner with orchestration service (LSP - synthetic agents work like regular agents)
     // This allows clients to subscribe to synthetic agents for message events
     this.orchestrationService.registerRunner(agent.id, this.syntheticAdapter);
+
+    // **CRITICAL FIX**: Auto-subscribe via StreamingService (like AgentOrchestrationService does)
+    // This ensures messages are persisted to database even if no WebSocket clients are connected
+    // Use 'system-test-controller' as client ID to indicate this is test controller initiated
+    this.streamingService.subscribeToAgent(agent.id, 'system-test-controller', this.syntheticAdapter);
+    this.logger.log(`Auto-subscribed to synthetic agent ${agent.id.toString()} for message persistence`);
 
     this.logger.log(
       `Synthetic agent ${agent.id.toString()} launched with ${dto.schedule.length} scheduled events`
@@ -153,31 +177,20 @@ export class TestController {
   }
 
   /**
-   * Create observer for synthetic agent
-   * Routes events to streaming service (which broadcasts via WebSocket)
+   * REMOVED: createObserver() method
+   *
+   * **WHY**: This was causing duplicate message emissions!
+   *
+   * **OLD BUGGY FLOW**:
+   * 1. TestController.createObserver() → Creates observer and subscribes
+   * 2. Client subscribes via WebSocket → StreamingService.createObserver() → Creates ANOTHER observer
+   * 3. Result: Every message emitted TWICE (once to each observer)
+   *
+   * **NEW CORRECT FLOW**:
+   * 1. TestController calls streamingService.subscribeToAgent() (line 138)
+   * 2. StreamingService creates THE ONLY observer and subscribes
+   * 3. Result: Every message emitted ONCE
+   *
+   * StreamingService handles all observer creation and event routing.
    */
-  private createObserver(agentId: AgentId): any {
-    return {
-      onMessage: (message: any) => {
-        this.streamingService.broadcastMessage(agentId, message).catch((err) => {
-          this.logger.error('Error broadcasting synthetic message:', err);
-        });
-      },
-      onStatusChange: (status: any) => {
-        this.streamingService.broadcastStatusChange(agentId, status);
-      },
-      onError: (error: Error) => {
-        this.streamingService.broadcastError(agentId, error);
-      },
-      onComplete: (result: any) => {
-        this.streamingService.broadcastComplete(agentId, result);
-
-        // Update agent status in database
-        const database = this.db.getDatabase();
-        database
-          .prepare('UPDATE agents SET status = ?, completed_at = ? WHERE id = ?')
-          .run('completed', new Date().toISOString(), agentId.toString());
-      },
-    };
-  }
 }

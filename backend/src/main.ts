@@ -2,6 +2,8 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConsoleLogger } from './infrastructure/logging/console-logger.service';
+import { ApplicationLifecycleService } from '@application/services/application-lifecycle.service';
+import { InstanceAlreadyRunningError } from '@domain/exceptions/instance-already-running.exception';
 
 /**
  * Bootstrap the NestJS application
@@ -37,6 +39,52 @@ async function bootstrap(): Promise<void> {
 
   // Add global API prefix
   app.setGlobalPrefix('api');
+
+  // Get lifecycle service
+  const lifecycle = app.get(ApplicationLifecycleService);
+
+  try {
+    // Check for existing instance BEFORE starting server
+    await lifecycle.startup();
+  } catch (error) {
+    if (error instanceof InstanceAlreadyRunningError) {
+      console.error(`
+╔═══════════════════════════════════════════════════════════╗
+║  ❌ Backend instance already running                      ║
+╚═══════════════════════════════════════════════════════════╝
+
+  PID:        ${error.lock.getPid()}
+  Started:    ${error.lock.getStartedAt().toISOString()}
+  Port:       ${error.lock.getPort()}
+
+  To stop the existing instance:
+    kill ${error.lock.getPid()}
+
+  To force restart:
+    kill -9 ${error.lock.getPid()} && npm run dev
+
+  Health check:
+    curl http://localhost:${error.lock.getPort()}/api/health
+      `);
+      process.exit(1);
+    }
+    throw error;
+  }
+
+  // Setup graceful shutdown handlers
+  process.on('SIGTERM', async () => {
+    logger.info('SIGTERM received, shutting down gracefully');
+    await lifecycle.shutdown();
+    await app.close();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', async () => {
+    logger.info('SIGINT received, shutting down gracefully');
+    await lifecycle.shutdown();
+    await app.close();
+    process.exit(0);
+  });
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

@@ -188,3 +188,23 @@ export function skipIfProxyNotAvailable() {
     }
   });
 }
+
+/**
+ * Cleanup test messages for specific agent
+ * Used in smoke tests to clean up after agent completion
+ */
+export async function cleanupTestMessages(app: INestApplication, agentId: string): Promise<void> {
+  try {
+    // Import DatabaseService dynamically to avoid circular dependencies
+    const { DatabaseService } = await import('@infrastructure/database/database.service');
+    const dbService = app.get(DatabaseService);
+    const db = dbService.getDatabase();
+
+    // Delete messages first (foreign key constraint)
+    db.prepare('DELETE FROM agent_messages WHERE agent_id = ?').run(agentId);
+    // Delete agent
+    db.prepare('DELETE FROM agents WHERE id = ?').run(agentId);
+  } catch (error) {
+    // Silently ignore errors (database might not exist in some tests)
+  }
+}

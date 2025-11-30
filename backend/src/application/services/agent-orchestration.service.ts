@@ -1,18 +1,27 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, forwardRef } from '@nestjs/common';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
-import { AgentConfiguration, Session } from '@domain/value-objects/session.vo';
+import { Session } from '@domain/value-objects/session.vo';
+import { LaunchRequest } from '@domain/value-objects/launch-request.vo';
 import { IAgentFactory } from '@application/ports/agent-factory.port';
 import { IAgentRepository } from '@application/ports/agent-repository.port';
 import { IAgentRunner } from '@application/ports/agent-runner.port';
+import { IAgentLaunchQueue } from '@application/ports/agent-launch-queue.port';
+import { IInstructionHandler, ClaudeFileBackup } from '@application/ports/instruction-handler.port';
 import { LaunchAgentDto } from '@application/dto/launch-agent.dto';
+import { StreamingService } from './streaming.service';
 
 /**
  * Agent Orchestration Service
  * Coordinates agent lifecycle: launch, terminate, and query operations
  * Application layer service implementing use cases
+ *
+ * **UPDATED**: Now uses queue-based launch with custom instruction support
+ * - Launches are serialized via IAgentLaunchQueue (one at a time)
+ * - Custom instructions temporarily replace CLAUDE.md files via IInstructionHandler
+ * - Auto-subscribes to launched agents via StreamingService for status persistence
  */
 @Injectable()
 export class AgentOrchestrationService {
@@ -21,77 +30,154 @@ export class AgentOrchestrationService {
 
   constructor(
     @Inject('IAgentFactory') private readonly agentFactory: IAgentFactory,
-    @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository
+    @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository,
+    @Inject(forwardRef(() => StreamingService))
+    private readonly streamingService: StreamingService,
+    @Inject('IAgentLaunchQueue') private readonly launchQueue: IAgentLaunchQueue,
+    @Inject('IInstructionHandler') private readonly instructionHandler: IInstructionHandler,
   ) {}
 
   /**
-   * Launch a new agent
-   * @param dto - Launch configuration
+   * Launch a new agent (PUBLIC API - via queue)
+   *
+   * This is the main entry point for launching agents. It enqueues the request
+   * which will be processed sequentially by the queue. This ensures only ONE
+   * agent launches at a time, preventing file conflicts when using custom instructions.
+   *
+   * @param dto - Launch configuration (includes optional instructions)
    * @returns The created and started agent
    * @throws Error if validation fails or agent fails to start
    */
   async launchAgent(dto: LaunchAgentDto): Promise<Agent> {
-    // Validation handled by NestJS ValidationPipe
+    this.logger.log('Launching agent via queue', {
+      type: dto.type,
+      hasInstructions: !!dto.configuration?.instructions,
+    });
 
-    // Convert DTO to domain types
-    const agentType = dto.type as AgentType;
-
-    // Convert configuration safely
-    const configuration: AgentConfiguration = {};
-    if (dto.configuration) {
-      if (dto.configuration.sessionId) {
-        configuration.sessionId = dto.configuration.sessionId;
-      }
-      if (dto.configuration.outputFormat === 'stream-json' || dto.configuration.outputFormat === 'json') {
-        configuration.outputFormat = dto.configuration.outputFormat;
-      }
-      if (dto.configuration.customArgs) {
-        configuration.customArgs = dto.configuration.customArgs;
-      }
-    }
-
-    // Create agent entity
-    const agent = Agent.create({
-      type: agentType,
+    // Convert DTO to LaunchRequest
+    const request = LaunchRequest.create({
+      agentType: dto.type as AgentType,
       prompt: dto.prompt,
-      configuration,
+      instructions: dto.configuration?.instructions,
+      sessionId: dto.configuration?.sessionId,
+      metadata: dto.configuration?.metadata,
+      configuration: dto.configuration as any, // DTO to domain type conversion
     });
 
-    // Get appropriate runner from factory
-    const runner = this.agentFactory.create(agent.type);
+    // Enqueue the request (will be processed sequentially)
+    return this.launchQueue.enqueue(request);
+  }
 
-    // **CRITICAL FIX**: Save agent to database BEFORE starting runner
-    // This ensures agent exists in DB before any messages are emitted
-    // Prevents FOREIGN KEY constraint failures on agent_messages.agent_id
-    await this.agentRepository.save(agent);
+  /**
+   * Launch agent directly (INTERNAL API - called by queue)
+   *
+   * This method performs the actual agent launch with instruction handling.
+   * It is called by the queue and should NOT be called directly by external code.
+   *
+   * Flow:
+   * 1. Prepare instruction environment (if instructions provided)
+   * 2. Create and save agent entity
+   * 3. Start runner
+   * 4. Restore instruction environment
+   * 5. Auto-subscribe for status persistence
+   *
+   * @param request - Launch request from queue
+   * @returns The launched agent
+   * @throws Error if launch fails
+   */
+  async launchAgentDirect(request: LaunchRequest): Promise<Agent> {
+    let backup: ClaudeFileBackup | null = null;
 
-    // **WORKAROUND**: Pass agent ID through session configuration
-    // TODO: Refactor IAgentRunner interface to accept Agent instead of just Session
-    const sessionWithAgentId = Session.create(agent.session.prompt, {
-      ...agent.session.configuration,
-      agentId: agent.id.toString(),  // Add agent ID to configuration
-    });
+    try {
+      // Step 1: Prepare instruction environment (if needed)
+      if (request.hasInstructions()) {
+        this.logger.log('Preparing custom instruction environment', {
+          requestId: request.id,
+          instructionsLength: request.instructions?.length,
+        });
+        backup = await this.instructionHandler.prepareEnvironment(
+          request.instructions,
+        );
+      }
 
-    // Start runner (will emit messages that reference the saved agent)
-    const startedAgent = await runner.start(sessionWithAgentId);
-
-    // **CRITICAL**: Verify returned agent has same ID as saved agent
-    if (startedAgent.id.toString() !== agent.id.toString()) {
-      this.logger.warn('Runner returned different agent ID!', {
-        expectedId: agent.id.toString(),
-        returnedId: startedAgent.id.toString(),
+      // Step 2: Create agent entity with full configuration
+      const configuration = request.toConfiguration();
+      const agent = Agent.create({
+        type: request.agentType,
+        prompt: request.prompt,
+        configuration,
       });
 
-      // **FIX**: Use the original saved agent, but copy the status from the started agent
-      // The runner created its own agent (design flaw), but we need to use our saved one
-      agent.markAsRunning();  // Update status to match what runner did
+      // Step 3: Save agent to database BEFORE starting runner
+      // This ensures agent exists in DB before any messages are emitted
+      await this.agentRepository.save(agent);
+      this.logger.log('Agent created and saved', {
+        agentId: agent.id.toString(),
+        status: agent.status,
+      });
+
+      // Step 4: Get appropriate runner from factory
+      const runner = this.agentFactory.create(agent.type);
+
+      // Step 5: Create session with agent ID workaround
+      const sessionWithAgentId = Session.create(agent.session.prompt, {
+        ...agent.session.configuration,
+        agentId: agent.id.toString(),
+      });
+
+      // Step 6: Start runner (will emit messages)
+      const startedAgent = await runner.start(sessionWithAgentId);
+
+      // Step 7: Update agent status to RUNNING
+      if (startedAgent.id.toString() !== agent.id.toString()) {
+        this.logger.warn('Runner returned different agent ID!', {
+          expectedId: agent.id.toString(),
+          returnedId: startedAgent.id.toString(),
+        });
+      }
+      agent.markAsRunning();
+
+      // Step 8: Save RUNNING status to database
+      await this.agentRepository.save(agent);
+
+      // Step 9: Store runner for this agent
+      this.runnerStorage.set(agent.id.toString(), runner);
+
+      // Step 10: Auto-subscribe via StreamingService
+      this.streamingService.subscribeToAgent(agent.id, 'system-orchestrator', runner);
+      this.logger.log(`Auto-subscribed to agent ${agent.id.toString()}`);
+
+      // Step 11: Restore instruction environment (instructions now cached by Claude)
+      if (backup) {
+        this.logger.log('Restoring environment after agent start', {
+          requestId: request.id,
+        });
+        await this.instructionHandler.restoreEnvironment(backup);
+      }
+
+      return agent;
+    } catch (error) {
+      this.logger.error('Failed to launch agent', {
+        requestId: request.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      // CRITICAL: Restore environment even on failure
+      if (backup) {
+        try {
+          await this.instructionHandler.restoreEnvironment(backup);
+          this.logger.log('Environment restored after error');
+        } catch (restoreError) {
+          this.logger.error('Failed to restore environment after error', {
+            error: restoreError instanceof Error
+              ? restoreError.message
+              : String(restoreError),
+          });
+        }
+      }
+
+      throw error;
     }
-
-    // Store runner for this agent
-    this.runnerStorage.set(agent.id.toString(), runner);
-
-    // **IMPORTANT**: Return the ORIGINAL agent (the one we saved to DB), not the runner's agent
-    return agent;
   }
 
   /**
@@ -203,5 +289,22 @@ export class AgentOrchestrationService {
   registerRunner(agentId: AgentId, runner: IAgentRunner): void {
     this.runnerStorage.set(agentId.toString(), runner);
     this.logger.log(`Runner registered for agent: ${agentId.toString()}`);
+  }
+
+  /**
+   * Get current queue length
+   * @returns Number of pending launch requests
+   */
+  getQueueLength(): number {
+    return this.launchQueue.getQueueLength();
+  }
+
+  /**
+   * Cancel a pending launch request
+   * @param requestId - UUID of the launch request to cancel
+   */
+  cancelLaunchRequest(requestId: string): void {
+    this.logger.log('Cancelling launch request', { requestId });
+    this.launchQueue.cancelRequest(requestId);
   }
 }

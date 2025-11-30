@@ -209,6 +209,144 @@ describe('selectors', () => {
 
       expect(messages).toEqual([]);
     });
+
+    it('should aggregate streaming tokens into a single message', () => {
+      const state = createTestState();
+
+      // Add streaming tokens for agent-3
+      state.messages.byAgentId['agent-3'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Hello',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-2',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: ' world',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-3',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: '!',
+            sequenceNumber: 3,
+            createdAt: '2025-11-10T10:15:02Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'msg-complete',
+            agentId: 'agent-3',
+            type: 'system' as const,
+            content: 'Complete',
+            sequenceNumber: 4,
+            createdAt: '2025-11-10T10:15:03Z',
+          }
+        ],
+        lastSequence: 4,
+        loading: false,
+        error: null,
+      };
+
+      const messages = selectMessagesForAgent(state, 'agent-3');
+
+      // Should aggregate 3 tokens into 1 message + 1 system message
+      expect(messages).toHaveLength(2);
+
+      // First message is aggregated content
+      expect(messages[0].content).toBe('Hello world!');
+      expect(messages[0].metadata?.aggregated).toBe(true);
+      expect(messages[0].metadata?.tokenCount).toBe(3);
+      expect(messages[0].metadata?.streaming).toBe(false);
+
+      // Second message is the system message
+      expect(messages[1].id).toBe('msg-complete');
+      expect(messages[1].type).toBe('system');
+    });
+
+    it('should mark in-progress streaming as streaming: true', () => {
+      const state = createTestState();
+
+      // Add in-progress streaming tokens (no completion message)
+      state.messages.byAgentId['agent-3'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'In',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-2',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: ' progress',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+            metadata: { eventType: 'content_delta' }
+          }
+        ],
+        lastSequence: 2,
+        loading: false,
+        error: null,
+      };
+
+      const messages = selectMessagesForAgent(state, 'agent-3');
+
+      expect(messages).toHaveLength(1);
+      expect(messages[0].content).toBe('In progress');
+      expect(messages[0].metadata?.streaming).toBe(true);
+    });
+
+    it('should not aggregate non-streaming messages', () => {
+      const state = createTestState();
+
+      // Regular messages without streaming metadata
+      state.messages.byAgentId['agent-3'] = {
+        messages: [
+          {
+            id: 'msg-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'First message',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+          },
+          {
+            id: 'msg-2',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Second message',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+          }
+        ],
+        lastSequence: 2,
+        loading: false,
+        error: null,
+      };
+
+      const messages = selectMessagesForAgent(state, 'agent-3');
+
+      // Should return both messages unchanged
+      expect(messages).toHaveLength(2);
+      expect(messages[0].content).toBe('First message');
+      expect(messages[1].content).toBe('Second message');
+      expect(messages[0].metadata?.aggregated).toBeUndefined();
+      expect(messages[1].metadata?.aggregated).toBeUndefined();
+    });
   });
 
   describe('selectMessagesForSelectedAgent', () => {

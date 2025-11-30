@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ProcessManager } from './process/process-manager.service';
 import { ClaudeSDKAdapter } from './adapters/claude-sdk.adapter';
@@ -9,13 +9,30 @@ import { InMemoryAgentRepository } from './repositories/in-memory-agent.reposito
 import { SqliteAgentRepository } from './repositories/sqlite-agent.repository';
 import { DatabaseService } from './database/database.service';
 import { ConsoleLogger } from './logging/console-logger.service';
+import { FileSystemService } from './filesystem/filesystem.service';
+import { ProcessUtils } from './process/process.utils';
+import { PidFileProcessManager } from './process/pid-file-process-manager.adapter';
+import { InMemoryAgentLaunchQueue } from './queue/in-memory-agent-launch-queue.adapter';
+import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruction-handler.adapter';
 
 /**
  * Infrastructure Module
  * Provides implementations for all infrastructure concerns
+ *
+ * NOTE: Circular dependency with ApplicationModule
+ * - InfrastructureModule provides queue adapter
+ * - Queue needs AgentOrchestrationService from ApplicationModule
+ * - Resolved using forwardRef()
  */
 @Module({
-  imports: [ConfigModule.forRoot()],
+  imports: [
+    ConfigModule.forRoot(),
+    forwardRef(() => {
+      // Lazy import to avoid circular dependency at module initialization
+      const { ApplicationModule } = require('../application/application.module');
+      return ApplicationModule;
+    }),
+  ],
   providers: [
     // Logging
     {
@@ -30,6 +47,29 @@ import { ConsoleLogger } from './logging/console-logger.service';
       useClass: ProcessManager,
     },
     ProcessManager,
+
+    // File system abstraction
+    FileSystemService,
+    { provide: 'IFileSystem', useClass: FileSystemService },
+
+    // Process utilities
+    ProcessUtils,
+
+    // Instance lock manager
+    PidFileProcessManager,
+    {
+      provide: 'IInstanceLockManager',
+      useClass: PidFileProcessManager
+    },
+
+    // PID file path configuration
+    {
+      provide: 'PID_FILE_PATH',
+      useFactory: (config: ConfigService) => {
+        return config.get<string>('PID_FILE_PATH') || './data/backend.pid';
+      },
+      inject: [ConfigService]
+    },
 
     // Claude SDK Adapter (requires API key)
     {
@@ -85,11 +125,14 @@ import { ConsoleLogger } from './logging/console-logger.service';
     // PHASE 4: Synthetic Agent Adapter (for testing)
     SyntheticAgentAdapter,
 
-    // Database Service
+    // Database Service - SINGLETON SCOPE (critical for data consistency)
+    // NOTE: No scope specified = DEFAULT scope = singleton
     {
       provide: DatabaseService,
       useFactory: (config: ConfigService, logger: ConsoleLogger) => {
         const repositoryType = config.get<string>('REPOSITORY_TYPE') || 'memory';
+
+        logger.warn('[FACTORY] DatabaseService factory called - creating new instance');
 
         if (repositoryType === 'sqlite') {
           const dbPath = config.get<string>('DATABASE_PATH') || './data/agents.db';
@@ -98,6 +141,7 @@ import { ConsoleLogger } from './logging/console-logger.service';
         }
 
         // Return a dummy service for in-memory mode
+        logger.warn('Using in-memory database');
         return new DatabaseService(':memory:');
       },
       inject: [ConfigService, ConsoleLogger],
@@ -128,14 +172,38 @@ import { ConsoleLogger } from './logging/console-logger.service';
       },
       inject: [ConfigService, ConsoleLogger, DatabaseService],
     },
-    InMemoryAgentRepository,
-    SqliteAgentRepository,
+    // NOTE: InMemoryAgentRepository and SqliteAgentRepository are NOT registered as standalone providers
+    // They are only created via the IAgentRepository factory above
+    // Registering them here would cause NestJS to inject DatabaseService into them,
+    // creating multiple DatabaseService instances and breaking data consistency!
+
+    // Instruction Handler (for custom instructions feature)
+    ClaudeInstructionHandler,
+    {
+      provide: 'IInstructionHandler',
+      useClass: ClaudeInstructionHandler,
+    },
+
+    // Agent Launch Queue (for serialized agent launches)
+    // NOTE: Circular dependency with AgentOrchestrationService
+    // Queue needs orchestration service to call launchAgentDirect
+    // Orchestration service needs queue to enqueue requests
+    // This is resolved by NestJS's dependency injection at runtime
+    InMemoryAgentLaunchQueue,
+    {
+      provide: 'IAgentLaunchQueue',
+      useClass: InMemoryAgentLaunchQueue,
+    },
   ],
   exports: [
     'ILogger',
     'IProcessManager',
     'IAgentFactory',
     'IAgentRepository',
+    'IFileSystem',
+    'IInstanceLockManager',
+    'IInstructionHandler',
+    'IAgentLaunchQueue',
     ClaudeSDKAdapter,
     ClaudePythonProxyAdapter,
     SyntheticAgentAdapter,

@@ -108,6 +108,197 @@ describe('SqliteAgentRepository', () => {
       expect(found?.status).toBe(AgentStatus.FAILED);
       expect(found?.error?.message).toBe('Test error');
     });
+
+    describe('CASCADE DELETE prevention (CRITICAL)', () => {
+      it('should NOT delete messages when updating agent status', async () => {
+        // Arrange: Create agent
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'Test with messages',
+          configuration: {},
+        });
+        await repository.save(agent);
+
+        // Create messages for this agent
+        const db = databaseService.getDatabase();
+        for (let i = 1; i <= 5; i++) {
+          db.prepare(`
+            INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Message ${i}`, new Date().toISOString());
+        }
+
+        // Verify messages exist
+        const messagesBefore = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+          .get(agent.id.toString()) as { count: number };
+        expect(messagesBefore.count).toBe(5);
+
+        // Act: Update agent status (this was triggering CASCADE DELETE with INSERT OR REPLACE)
+        agent.markAsRunning();
+        await repository.save(agent);
+
+        // Assert: Messages should still exist
+        const messagesAfter = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+          .get(agent.id.toString()) as { count: number };
+        expect(messagesAfter.count).toBe(5);
+
+        // Verify message content preserved
+        const messages = db.prepare('SELECT * FROM agent_messages WHERE agent_id = ? ORDER BY sequence_number')
+          .all(agent.id.toString()) as Array<{ content: string; sequence_number: number }>;
+        expect(messages).toHaveLength(5);
+        expect(messages[0]?.content).toBe('Message 1');
+        expect(messages[4]?.content).toBe('Message 5');
+      });
+
+      it('should preserve messages through multiple status transitions', async () => {
+        // Arrange: Create agent with messages
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'Multiple transitions',
+          configuration: {},
+        });
+        await repository.save(agent);
+
+        // Create 10 messages
+        const db = databaseService.getDatabase();
+        for (let i = 1; i <= 10; i++) {
+          db.prepare(`
+            INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Token ${i}`, new Date().toISOString());
+        }
+
+        // Act: Multiple status transitions
+        agent.markAsRunning();
+        await repository.save(agent);
+
+        agent.markAsCompleted();
+        await repository.save(agent);
+
+        // Assert: All 10 messages should still exist
+        const messages = db.prepare('SELECT * FROM agent_messages WHERE agent_id = ?')
+          .all(agent.id.toString());
+        expect(messages).toHaveLength(10);
+      });
+
+      it('should preserve messages during rapid successive updates', async () => {
+        // Arrange: Create agent with messages
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'Rapid updates',
+          configuration: {},
+        });
+        await repository.save(agent);
+
+        // Create messages
+        const db = databaseService.getDatabase();
+        for (let i = 1; i <= 3; i++) {
+          db.prepare(`
+            INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Message ${i}`, new Date().toISOString());
+        }
+
+        // Act: Rapid status updates (simulating real-world scenario)
+        agent.markAsRunning();
+        await repository.save(agent);
+        await repository.save(agent); // Redundant save
+        await repository.save(agent); // Redundant save
+
+        // Assert: Messages should survive redundant saves
+        const messagesAfter = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+          .get(agent.id.toString()) as { count: number };
+        expect(messagesAfter.count).toBe(3);
+      });
+
+      it('should use UPDATE (not INSERT OR REPLACE) for existing agents', async () => {
+        // Arrange: Create agent
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'Test UPDATE pathway',
+          configuration: {},
+        });
+        await repository.save(agent);
+
+        // Create a message
+        const db = databaseService.getDatabase();
+        db.prepare(`
+          INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run('test-msg', agent.id.toString(), 1, 'assistant', 'Test content', new Date().toISOString());
+
+        // Get the rowid of the agent row (INSERT OR REPLACE would change this)
+        const rowBefore = db.prepare('SELECT rowid, * FROM agents WHERE id = ?')
+          .get(agent.id.toString()) as { rowid: number };
+
+        // Act: Update agent
+        agent.markAsRunning();
+        await repository.save(agent);
+
+        // Assert: rowid should remain the same (proving UPDATE was used, not INSERT)
+        const rowAfter = db.prepare('SELECT rowid, * FROM agents WHERE id = ?')
+          .get(agent.id.toString()) as { rowid: number };
+        expect(rowAfter.rowid).toBe(rowBefore.rowid);
+
+        // Assert: Message should still exist
+        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?')
+          .get('test-msg');
+        expect(message).toBeDefined();
+      });
+
+      it('should handle INSERT for new agents correctly', async () => {
+        // Arrange: Create agent (first save)
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'New agent',
+          configuration: {},
+        });
+
+        // Act: First save should INSERT
+        await repository.save(agent);
+
+        // Assert: Agent exists in database
+        const db = databaseService.getDatabase();
+        const row = db.prepare('SELECT * FROM agents WHERE id = ?')
+          .get(agent.id.toString());
+        expect(row).toBeDefined();
+      });
+
+      it('should update all agent fields without affecting messages', async () => {
+        // Arrange: Create agent with messages
+        const agent = Agent.create({
+          type: AgentType.CLAUDE_CODE,
+          prompt: 'Field update test',
+          configuration: {},
+        });
+        await repository.save(agent);
+
+        // Create messages
+        const db = databaseService.getDatabase();
+        db.prepare(`
+          INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `).run('msg-1', agent.id.toString(), 1, 'assistant', 'Content', new Date().toISOString());
+
+        // Act: Update multiple fields
+        agent.markAsRunning();
+        await repository.save(agent);
+
+        agent.markAsCompleted();
+        await repository.save(agent);
+
+        // Assert: All fields updated correctly
+        const found = await repository.findById(agent.id);
+        expect(found?.status).toBe(AgentStatus.COMPLETED);
+        expect(found?.startedAt).toBeDefined();
+        expect(found?.completedAt).toBeDefined();
+
+        // Assert: Message still exists
+        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?')
+          .get('msg-1');
+        expect(message).toBeDefined();
+      });
+    });
   });
 
   describe('findById', () => {

@@ -56,20 +56,41 @@ export class SqliteAgentRepository implements IAgentRepository {
       error_name: agent.error?.name || null,
     };
 
-    // Use INSERT OR REPLACE for upsert behavior
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO agents (
-        id, type, status, prompt, configuration,
-        created_at, started_at, completed_at,
-        error_message, error_name
-      ) VALUES (
-        @id, @type, @status, @prompt, @configuration,
-        @created_at, @started_at, @completed_at,
-        @error_message, @error_name
-      )
-    `);
+    // Check if agent exists to avoid CASCADE DELETE of messages
+    const existsStmt = db.prepare(`SELECT 1 FROM agents WHERE id = ?`);
+    const exists = existsStmt.get(row.id);
 
-    stmt.run(row);
+    if (exists) {
+      // UPDATE existing agent (preserves foreign key relationships, doesn't delete messages)
+      const updateStmt = db.prepare(`
+        UPDATE agents SET
+          type = @type,
+          status = @status,
+          prompt = @prompt,
+          configuration = @configuration,
+          created_at = @created_at,
+          started_at = @started_at,
+          completed_at = @completed_at,
+          error_message = @error_message,
+          error_name = @error_name
+        WHERE id = @id
+      `);
+      updateStmt.run(row);
+    } else {
+      // INSERT new agent
+      const insertStmt = db.prepare(`
+        INSERT INTO agents (
+          id, type, status, prompt, configuration,
+          created_at, started_at, completed_at,
+          error_message, error_name
+        ) VALUES (
+          @id, @type, @status, @prompt, @configuration,
+          @created_at, @started_at, @completed_at,
+          @error_message, @error_name
+        )
+      `);
+      insertStmt.run(row);
+    }
   }
 
   /**

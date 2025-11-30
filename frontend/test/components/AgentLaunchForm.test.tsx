@@ -128,4 +128,37 @@ describe('AgentLaunchForm', () => {
       expect(submitButton).not.toBeDisabled();
     });
   });
+
+  describe('Working Directory', () => {
+    it('should render working directory input field', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      expect(screen.getByLabelText(/Working Directory/i)).toBeInTheDocument();
+    });
+
+    it('should allow entering a working directory', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const workingDirInput = screen.getByLabelText(/Working Directory/i) as HTMLInputElement;
+      fireEvent.change(workingDirInput, { target: { value: '/tmp/test-dir' } });
+
+      expect(workingDirInput.value).toBe('/tmp/test-dir');
+    });
+
+    it('should have placeholder text for working directory', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const workingDirInput = screen.getByLabelText(/Working Directory/i) as HTMLInputElement;
+      expect(workingDirInput.placeholder).toContain('optional');
+    });
+
+    it('should allow relative paths in working directory', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const workingDirInput = screen.getByLabelText(/Working Directory/i) as HTMLInputElement;
+      fireEvent.change(workingDirInput, { target: { value: './my-project' } });
+
+      expect(workingDirInput.value).toBe('./my-project');
+    });
+  });
 });

@@ -1,6 +1,7 @@
 import { StreamingService } from '@application/services/streaming.service';
 import { AgentMessageService } from '@application/services/agent-message.service';
 import { IWebSocketGateway } from '@application/ports/websocket-gateway.port';
+import { IAgentRepository } from '@application/ports/agent-repository.port';
 import { IAgentRunner, AgentMessage, AgentResult } from '@application/ports/agent-runner.port';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
@@ -8,6 +9,7 @@ import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 describe('StreamingService', () => {
   let service: StreamingService;
   let mockWebSocketGateway: jest.Mocked<IWebSocketGateway>;
+  let mockAgentRepository: jest.Mocked<IAgentRepository>;
   let mockMessageService: jest.Mocked<AgentMessageService>;
   let mockAgentRunner: jest.Mocked<IAgentRunner>;
 
@@ -22,6 +24,15 @@ describe('StreamingService', () => {
       getConnectedClients: jest.fn(),
       isClientConnected: jest.fn(),
     };
+
+    // Create mock agent repository
+    mockAgentRepository = {
+      save: jest.fn(),
+      findById: jest.fn(),
+      findByStatus: jest.fn(),
+      findAll: jest.fn(),
+      delete: jest.fn(),
+    } as any;
 
     // Create mock message service
     mockMessageService = {
@@ -46,8 +57,8 @@ describe('StreamingService', () => {
       unsubscribe: jest.fn(),
     };
 
-    // Create service with mocks
-    service = new StreamingService(mockWebSocketGateway, mockMessageService);
+    // Create service with mocks (constructor signature updated to include agentRepository)
+    service = new StreamingService(mockWebSocketGateway, mockAgentRepository, mockMessageService);
   });
 
   describe('subscribeToAgent', () => {

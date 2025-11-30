@@ -20,13 +20,22 @@ export interface AgentConfigurationDto {
   sessionId?: string;
 
   /**
+   * Custom instructions to temporarily replace CLAUDE.md files
+   * When provided, the user-level and project-level CLAUDE.md files
+   * are backed up and replaced with these instructions during agent startup.
+   * Original files are restored after the agent starts.
+   * @maxLength 100000
+   */
+  instructions?: string;
+
+  /**
    * Custom CLI arguments
    * Optional additional flags for the CLI
    */
   customArgs?: string[];
 
   /**
-   * Additional metadata
+   * Additional metadata for tracking/context
    */
   metadata?: Record<string, unknown>;
 
@@ -44,6 +53,12 @@ export interface AgentConfigurationDto {
    * Disallowed tools
    */
   disallowedTools?: string[];
+
+  /**
+   * Working directory for the agent process
+   * Can be absolute or relative path
+   */
+  workingDirectory?: string;
 }
 
 /**
@@ -141,6 +156,10 @@ export class LaunchAgentDto {
 
     if (this.configuration.disallowedTools) {
       config.disallowedTools = this.configuration.disallowedTools;
+    }
+
+    if (this.configuration.workingDirectory) {
+      config.workingDirectory = this.configuration.workingDirectory;
     }
 
     return config;

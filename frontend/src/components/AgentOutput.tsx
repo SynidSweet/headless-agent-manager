@@ -18,6 +18,14 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
     agentId ? selectors.selectMessagesForAgent(state, agentId) : []
   );
 
+  const loading = useSelector((state: RootState) =>
+    agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
+  );
+
+  const error = useSelector((state: RootState) =>
+    agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
+  );
+
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     if (outputRef.current && autoScroll) {
@@ -95,7 +103,27 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
   };
 
   if (!agentId) {
-    return null;
+    return (
+      <div className="flex h-full items-center justify-center text-gray-500 dark:text-[#545a78]">
+        Select an agent to view output
+      </div>
+    );
+  }
+
+  if (loading && messages.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-gray-500 dark:text-[#545a78]">
+        Loading messages...
+      </div>
+    );
+  }
+
+  if (error && messages.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-red-500 dark:text-red-400">
+        Error loading messages: {error}
+      </div>
+    );
   }
 
   return (

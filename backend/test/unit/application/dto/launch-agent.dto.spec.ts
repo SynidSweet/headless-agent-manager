@@ -133,6 +133,34 @@ describe('LaunchAgentDto', () => {
       expect(dto.configuration.metadata).toEqual({ foo: 'bar' });
     });
 
+    it('should allow workingDirectory in configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        workingDirectory: '/home/user/projects/my-app',
+      };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+      expect(dto.configuration.workingDirectory).toBe('/home/user/projects/my-app');
+    });
+
+    it('should allow relative workingDirectory in configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        workingDirectory: './my-project',
+      };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+      expect(dto.configuration.workingDirectory).toBe('./my-project');
+    });
+
     it('should work without configuration', () => {
       // Arrange
       const dto = new LaunchAgentDto();
@@ -142,6 +170,79 @@ describe('LaunchAgentDto', () => {
       // Act & Assert
       expect(() => dto.validate()).not.toThrow();
       expect(dto.configuration).toBeUndefined();
+    });
+  });
+
+  describe('toAgentConfiguration', () => {
+    it('should convert DTO configuration to domain configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        sessionId: 'test-session',
+        outputFormat: 'stream-json',
+        customArgs: ['--yolo'],
+        timeout: 60000,
+        allowedTools: ['read', 'write'],
+        disallowedTools: ['web-search'],
+      };
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.sessionId).toBe('test-session');
+      expect(config.outputFormat).toBe('stream-json');
+      expect(config.customArgs).toEqual(['--yolo']);
+      expect(config.timeout).toBe(60000);
+      expect(config.allowedTools).toEqual(['read', 'write']);
+      expect(config.disallowedTools).toEqual(['web-search']);
+    });
+
+    it('should include workingDirectory in converted configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        workingDirectory: '/home/user/projects/my-app',
+      };
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.workingDirectory).toBe('/home/user/projects/my-app');
+    });
+
+    it('should handle relative workingDirectory in converted configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        workingDirectory: './my-project',
+      };
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.workingDirectory).toBe('./my-project');
+    });
+
+    it('should return empty configuration when no configuration provided', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config).toEqual({});
     });
   });
 });

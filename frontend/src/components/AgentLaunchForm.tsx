@@ -10,6 +10,7 @@ export function AgentLaunchForm() {
   const dispatch = useDispatch<AppDispatch>();
   const [type, setType] = useState<AgentType>('claude-code');
   const [prompt, setPrompt] = useState('');
+  const [workingDirectory, setWorkingDirectory] = useState('');
   const [isLaunching, setIsLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,11 +31,13 @@ export function AgentLaunchForm() {
         prompt,
         configuration: {
           outputFormat: 'stream-json',
+          ...(workingDirectory.trim() && { workingDirectory: workingDirectory.trim() }),
         },
       };
 
       await dispatch(actions.launchAgent(request)).unwrap();
       setPrompt('');
+      setWorkingDirectory('');
       // Agent automatically added to Redux via launchAgent.fulfilled action
       // WebSocket subscription automatically started via middleware
     } catch (err) {
@@ -61,7 +64,7 @@ export function AgentLaunchForm() {
           color: tokens.colors.text,
         }}
       >
-        Launch New Agent
+        Launch New Agent (v2.0)
       </h2>
       <form
         onSubmit={handleSubmit}
@@ -136,6 +139,42 @@ export function AgentLaunchForm() {
               border: `1px solid ${tokens.colors.border}`,
               fontFamily: tokens.typography.fontFamilyMono,
               resize: 'vertical',
+              backgroundColor: tokens.colors.background,
+              color: tokens.colors.text,
+            }}
+            disabled={isLaunching}
+          />
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.sm,
+          }}
+        >
+          <label
+            htmlFor="working-directory"
+            style={{
+              fontWeight: '600',
+              fontSize: tokens.typography.fontSize.md,
+              color: tokens.colors.text,
+            }}
+          >
+            Working Directory:
+          </label>
+          <input
+            id="working-directory"
+            type="text"
+            value={workingDirectory}
+            onChange={(e) => setWorkingDirectory(e.target.value)}
+            placeholder="/path/to/project (optional)"
+            style={{
+              padding: tokens.spacing.sm,
+              fontSize: tokens.typography.fontSize.md,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.border}`,
+              fontFamily: tokens.typography.fontFamilyMono,
               backgroundColor: tokens.colors.background,
               color: tokens.colors.text,
             }}

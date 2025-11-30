@@ -8,6 +8,7 @@ import {
   getPythonProxyUrl,
   verifyClaudeAuthentication,
 } from './helpers';
+import { DatabaseService } from '@infrastructure/database/database.service';
 
 /**
  * SMOKE TESTS - Real Python Proxy Integration
@@ -279,4 +280,194 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
 
     console.log('✅ Error handling test completed');
   }, 30000);
+
+  /**
+   * TEST #7: Real Agent with Message Streaming (SMOKE TEST)
+   * Verifies messages stream in real-time from actual Claude CLI
+   */
+  it('should stream messages in real-time from real Claude agent', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Launch real agent
+    const launchResponse = await request(app.getHttpServer())
+      .post('/api/agents')
+      .send({
+        type: 'claude-code',
+        prompt: 'Count to 3 slowly. Output: 1, 2, 3',
+        configuration: {},
+      })
+      .expect(201);
+
+    const agentId = launchResponse.body.agentId;
+    console.log(`✅ Launched real agent: ${agentId}`);
+
+    // Wait for agent to stream messages
+    await new Promise((resolve) => setTimeout(resolve, 20000)); // Real CLI takes time
+
+    // Verify messages were received
+    const messagesResponse = await request(app.getHttpServer())
+      .get(`/api/agents/${agentId}/messages`)
+      .expect(200);
+
+    console.log(`✅ Received ${messagesResponse.body.length} messages from real agent`);
+
+    expect(messagesResponse.body.length).toBeGreaterThan(0);
+    expect(messagesResponse.body.some((m: any) => m.type === 'assistant')).toBe(true);
+  }, 60000); // 60 second timeout for real CLI
+
+  /**
+   * TEST #8: Message Persistence After Completion (SMOKE TEST)
+   * Verifies messages persist to database after agent completes
+   */
+  it('should persist messages to database after agent completes', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Launch real agent
+    const launchResponse = await request(app.getHttpServer())
+      .post('/api/agents')
+      .send({
+        type: 'claude-code',
+        prompt: 'What is 2+2? Just answer with the number.',
+        configuration: {},
+      })
+      .expect(201);
+
+    const agentId = launchResponse.body.agentId;
+
+    // Wait for completion
+    await new Promise((resolve) => setTimeout(resolve, 20000));
+
+    // Get messages via API
+    const apiMessages = await request(app.getHttpServer())
+      .get(`/api/agents/${agentId}/messages`)
+      .expect(200);
+
+    // Get messages directly from database
+    const dbService = app.get(DatabaseService);
+    const db = dbService.getDatabase();
+
+    const dbMessages = db.prepare('SELECT * FROM agent_messages WHERE agent_id = ?').all(agentId);
+
+    // API and database should match
+    expect(apiMessages.body.length).toBe(dbMessages.length);
+    expect(dbMessages.length).toBeGreaterThan(0);
+
+    console.log(`✅ Messages persisted: ${dbMessages.length} in database`);
+
+    // Verify specific message structure
+    dbMessages.forEach((msg: any) => {
+      expect(msg).toHaveProperty('id');
+      expect(msg).toHaveProperty('type');
+      expect(msg).toHaveProperty('sequence_number');
+      expect(msg).toHaveProperty('content');
+    });
+  }, 60000);
+
+  /**
+   * TEST #9: Token Streaming Verification (SMOKE TEST)
+   * Verifies individual tokens are being streamed (not just complete messages)
+   */
+  it('should stream individual tokens from real Claude agent', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Launch agent
+    const launchResponse = await request(app.getHttpServer())
+      .post('/api/agents')
+      .send({
+        type: 'claude-code',
+        prompt: 'Say exactly: Hello World',
+        configuration: {},
+      })
+      .expect(201);
+
+    const agentId = launchResponse.body.agentId;
+
+    // Wait for streaming
+    await new Promise((resolve) => setTimeout(resolve, 15000));
+
+    // Check messages
+    const messagesResponse = await request(app.getHttpServer())
+      .get(`/api/agents/${agentId}/messages`)
+      .expect(200);
+
+    const messages = messagesResponse.body;
+
+    // With token streaming, we should have multiple messages
+    // (not just one complete message)
+    console.log(`✅ Received ${messages.length} streamed messages`);
+
+    // Should have at least: init, tokens (multiple), completion
+    expect(messages.length).toBeGreaterThanOrEqual(3);
+
+    // Verify sequence numbers are sequential
+    const sequenceNumbers = messages.map((m: any) => m.sequenceNumber).sort((a: number, b: number) => a - b);
+    for (let i = 0; i < sequenceNumbers.length; i++) {
+      expect(sequenceNumbers[i]).toBe(i + 1);
+    }
+  }, 60000);
+
+  /**
+   * TEST #7: Working Directory Feature
+   * Verifies agent launches with custom working directory
+   */
+  it('should launch agent in custom working directory', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Create a temporary test directory
+    const testDir = '/tmp/claude-agent-test-wd';
+    const { execSync } = require('child_process');
+    execSync(`mkdir -p ${testDir} && echo "test-marker" > ${testDir}/marker.txt`);
+
+    try {
+      // Launch agent with custom working directory
+      const launchResponse = await request(app.getHttpServer())
+        .post('/api/agents')
+        .send({
+          type: 'claude-code',
+          prompt: 'Use the Bash tool to run "pwd" and tell me the current directory. Also check if marker.txt exists.',
+          configuration: {
+            workingDirectory: testDir,
+          },
+        })
+        .expect(201);
+
+      const agentId = launchResponse.body.agentId;
+      console.log(`✅ Agent launched with working directory: ${testDir}`);
+
+      // Wait for agent to process
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+
+      // Get messages to verify agent ran in correct directory
+      const messagesResponse = await request(app.getHttpServer())
+        .get(`/api/agents/${agentId}/messages`)
+        .expect(200);
+
+      const messages = messagesResponse.body;
+      const allContent = messages.map((m: any) => m.content).join(' ');
+
+      // Verify agent mentioned the test directory
+      expect(allContent).toContain(testDir);
+      console.log('✅ Agent executed in correct working directory');
+
+    } finally {
+      // Cleanup
+      execSync(`rm -rf ${testDir}`);
+    }
+  }, 60000);
 });

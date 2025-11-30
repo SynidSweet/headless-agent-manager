@@ -14,6 +14,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   constructor(dbPath: string = ':memory:') {
     this.dbPath = dbPath;
+    const instanceId = Math.random().toString(36).substring(7);
+    console.log(`[DatabaseService#${instanceId}] CONSTRUCTOR CALLED with path: ${dbPath}`);
+    (this as any).instanceId = instanceId;
   }
 
   /**
@@ -26,6 +29,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Close database connection on shutdown
+   * With DELETE mode, no checkpoint needed - data is already on disk
    */
   onModuleDestroy(): void {
     this.close();
@@ -45,19 +49,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
    * Connect to database
    */
   connect(): void {
+    const instanceId = (this as any).instanceId || '?';
+
     if (this.db) {
+      console.log(`[DatabaseService#${instanceId}] Already connected to: ${this.dbPath}`);
       return; // Already connected
     }
 
+    console.log(`[DatabaseService#${instanceId}] CONNECTING to: ${this.dbPath}, NODE_ENV: ${process.env.NODE_ENV}`);
     this.db = new Database(this.dbPath, {
-      verbose: process.env.NODE_ENV === 'development' ? console.log : undefined,
+      // ALWAYS enable verbose mode to debug message persistence issue
+      verbose: console.log,
     });
 
     // Enable foreign keys
     this.db.pragma('foreign_keys = ON');
 
-    // Enable WAL mode for better concurrency
-    this.db.pragma('journal_mode = WAL');
+    // Use DELETE mode for simplicity and robustness (synchronous writes, single file)
+    // With single-instance enforcement, we don't need WAL's concurrency benefits
+    this.db.pragma('journal_mode = DELETE');
+
+    console.log(`[DatabaseService#${instanceId}] Connected! FK=${this.db.pragma('foreign_keys', { simple: true })}, journal_mode=${this.db.pragma('journal_mode', { simple: true })}`);
   }
 
   /**

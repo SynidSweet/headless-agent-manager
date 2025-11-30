@@ -54,12 +54,24 @@ class ClaudeRunner:
             # Prepare environment
             env = self._prepare_environment()
 
+            # Extract and expand working directory if provided
+            cwd = options.get("working_directory")
+            if cwd:
+                # Expand ~ to user home directory and resolve to absolute path
+                cwd = os.path.expanduser(cwd)
+                cwd = os.path.abspath(cwd)
+
+                # Validate directory exists
+                if not os.path.isdir(cwd):
+                    raise RuntimeError(f"Working directory does not exist: {cwd}")
+
             # Spawn process
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=env,
+                cwd=cwd,  # Set working directory
                 shell=True,  # Required for Claude CLI to work
             )
 
