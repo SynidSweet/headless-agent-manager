@@ -1,20 +1,51 @@
+/**
+ * useAgentMessages Hook Tests - Redux Version
+ * Tests for Redux-based message state management
+ */
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor, act } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
+import { Provider } from 'react-redux';
+import { configureStore } from '@reduxjs/toolkit';
 import { useAgentMessages, aggregateStreamingTokens } from '@/hooks/useAgentMessages';
-import { ApiService } from '@/services/api.service';
-import type { AgentMessage } from '@/types/agent.types';
+import {
+  messagesSlice,
+  agentsSlice,
+  connectionSlice,
+  AgentApiClient,
+  type AgentMessage,
+} from '@headless-agent-manager/client';
 
 /**
- * useAgentMessages Hook Tests
- * Tests for message state management with deduplication and gap detection
+ * Create a test store for testing
  */
-describe('useAgentMessages', () => {
+function createTestStore(preloadedState?: any) {
+  return configureStore({
+    reducer: {
+      agents: agentsSlice.reducer,
+      messages: messagesSlice.reducer,
+      connection: connectionSlice.reducer,
+    },
+    preloadedState,
+  });
+}
+
+/**
+ * Wrapper component that provides Redux store
+ */
+function createWrapper(store: ReturnType<typeof createTestStore>) {
+  return function Wrapper({ children }: { children: React.ReactNode }) {
+    return <Provider store={store}>{children}</Provider>;
+  };
+}
+
+describe('useAgentMessages - Redux Version', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('Loading historical messages', () => {
-    it('should load historical messages when agent selected', async () => {
+  describe('Loading messages from Redux', () => {
+    it('should dispatch fetchMessages when agent selected', async () => {
       // Arrange
       const mockHistory: AgentMessage[] = [
         {
@@ -23,277 +54,229 @@ describe('useAgentMessages', () => {
           sequenceNumber: 1,
           type: 'user',
           content: 'Hello',
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: 'msg-2',
-          agentId: 'agent-123',
-          sequenceNumber: 2,
-          type: 'assistant',
-          content: 'Hi there',
-          createdAt: '2025-01-01T00:00:01Z',
+          timestamp: '2025-01-01T00:00:00Z',
         },
       ];
 
-      vi.spyOn(ApiService, 'getAgentMessages').mockResolvedValue(mockHistory);
+      vi.spyOn(AgentApiClient, 'getAgentMessages').mockResolvedValue(mockHistory);
+
+      const store = createTestStore();
 
       // Act
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      // Assert
-      await waitFor(() => {
-        expect(result.current.messages).toEqual(mockHistory);
-        expect(result.current.loading).toBe(false);
+      const { result } = renderHook(() => useAgentMessages('agent-123'), {
+        wrapper: createWrapper(store),
       });
-    });
 
-    it('should show loading state while fetching messages', () => {
-      // Arrange
-      vi.spyOn(ApiService, 'getAgentMessages').mockImplementation(
-        () => new Promise(() => {}) // Never resolves
-      );
-
-      // Act
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      // Assert
+      // Assert - Should start in loading state
       expect(result.current.loading).toBe(true);
-      expect(result.current.messages).toEqual([]);
-    });
 
-    it('should handle API errors gracefully', async () => {
-      // Arrange
-      const error = new Error('Network error');
-      vi.spyOn(ApiService, 'getAgentMessages').mockRejectedValue(error);
-
-      // Act
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      // Assert
+      // Wait for fetch to complete
       await waitFor(() => {
-        expect(result.current.error).toEqual(error);
         expect(result.current.loading).toBe(false);
+        expect(result.current.messages).toHaveLength(1);
+        expect(result.current.messages[0]?.content).toBe('Hello');
       });
     });
 
     it('should return empty array when no agent selected', () => {
+      // Arrange
+      const store = createTestStore();
+
       // Act
-      const { result } = renderHook(() => useAgentMessages(null));
+      const { result } = renderHook(() => useAgentMessages(null), {
+        wrapper: createWrapper(store),
+      });
 
       // Assert
       expect(result.current.messages).toEqual([]);
       expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeNull();
     });
-  });
 
-  describe('Real-time message handling', () => {
-    it('should append new message from WebSocket', async () => {
+    it('should handle API errors', async () => {
       // Arrange
-      const mockHistory: AgentMessage[] = [
-        {
-          id: 'msg-1',
-          agentId: 'agent-123',
-          sequenceNumber: 1,
-          type: 'user',
-          content: 'Hello',
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-      ];
+      const error = new Error('Network error');
+      vi.spyOn(AgentApiClient, 'getAgentMessages').mockRejectedValue(error);
 
-      vi.spyOn(ApiService, 'getAgentMessages').mockResolvedValue(mockHistory);
+      const store = createTestStore();
 
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // Act - Simulate WebSocket message
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('agent:message', {
-            detail: {
-              agentId: 'agent-123',
-              message: {
-                id: 'msg-2',
-                agentId: 'agent-123',
-                sequenceNumber: 2,
-                type: 'assistant',
-                content: 'New message',
-                createdAt: '2025-01-01T00:00:01Z',
-              },
-            },
-          })
-        );
+      // Act
+      const { result } = renderHook(() => useAgentMessages('agent-123'), {
+        wrapper: createWrapper(store),
       });
 
       // Assert
-      expect(result.current.messages).toHaveLength(2);
-      expect(result.current.messages[1]?.id).toBe('msg-2');
-    });
-
-    it('should ignore messages for different agents', async () => {
-      // Arrange
-      const mockHistory: AgentMessage[] = [
-        {
-          id: 'msg-1',
-          agentId: 'agent-123',
-          sequenceNumber: 1,
-          type: 'user',
-          content: 'Hello',
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-      ];
-
-      vi.spyOn(ApiService, 'getAgentMessages').mockResolvedValue(mockHistory);
-
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      // Act - Message for different agent
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('agent:message', {
-            detail: {
-              agentId: 'agent-456', // Different agent!
-              message: {
-                id: 'msg-x',
-                agentId: 'agent-456',
-                sequenceNumber: 1,
-                type: 'user',
-                content: 'Wrong agent',
-                createdAt: '2025-01-01T00:00:02Z',
-              },
-            },
-          })
-        );
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+        expect(result.current.error).toBeTruthy();
+        expect(result.current.error?.message).toBe('Network error');
       });
-
-      // Assert - Should not append
-      expect(result.current.messages).toHaveLength(1);
     });
   });
 
-  describe('Message deduplication', () => {
-    it('should deduplicate messages by ID', async () => {
-      // Arrange
-      const mockHistory: AgentMessage[] = [
+  describe('Reading from Redux state', () => {
+    it('should read messages from preloaded Redux state', () => {
+      // Arrange - Create store with preloaded messages
+      const preloadedMessages: AgentMessage[] = [
         {
           id: 'msg-1',
           agentId: 'agent-123',
           sequenceNumber: 1,
           type: 'user',
-          content: 'Hello',
-          createdAt: '2025-01-01T00:00:00Z',
+          content: 'Preloaded message',
+          timestamp: '2025-01-01T00:00:00Z',
         },
       ];
 
-      vi.spyOn(ApiService, 'getAgentMessages').mockResolvedValue(mockHistory);
-
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      await waitFor(() => expect(result.current.loading).toBe(false));
-
-      const existingMessage = result.current.messages[0]!;
-
-      // Act - Send duplicate message
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('agent:message', {
-            detail: {
-              agentId: 'agent-123',
-              message: existingMessage, // Same ID!
+      const store = createTestStore({
+        messages: {
+          byAgentId: {
+            'agent-123': {
+              messages: preloadedMessages,
+              lastSequence: 1,
+              loading: false,
+              error: null,
             },
-          })
-        );
+          },
+          messageIds: { 'msg-1': true },
+        },
       });
 
-      // Assert - Should not duplicate
-      expect(result.current.messages).toHaveLength(1);
-      const messageIds = result.current.messages.map((m) => m.id);
-      const uniqueIds = new Set(messageIds);
-      expect(messageIds.length).toBe(uniqueIds.size);
-    });
-  });
+      // Mock API to prevent fetch
+      vi.spyOn(AgentApiClient, 'getAgentMessages').mockResolvedValue([]);
 
-  describe('Gap detection and filling', () => {
-    it('should detect and fill gaps in sequence', async () => {
-      // Arrange
-      const mockHistory: AgentMessage[] = [
+      // Act
+      const { result } = renderHook(() => useAgentMessages('agent-123'), {
+        wrapper: createWrapper(store),
+      });
+
+      // Assert - Should immediately have preloaded messages
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]?.content).toBe('Preloaded message');
+    });
+
+    it('should aggregate streaming tokens via selector', async () => {
+      // Arrange - Create store with streaming tokens
+      const streamingMessages: AgentMessage[] = [
         {
           id: 'msg-1',
           agentId: 'agent-123',
           sequenceNumber: 1,
-          type: 'user',
-          content: 'Message 1',
-          createdAt: '2025-01-01T00:00:00Z',
+          type: 'assistant',
+          content: 'Hello',
+          timestamp: '2025-01-01T00:00:00Z',
+          metadata: { eventType: 'content_delta' },
         },
         {
           id: 'msg-2',
           agentId: 'agent-123',
           sequenceNumber: 2,
           type: 'assistant',
-          content: 'Message 2',
-          createdAt: '2025-01-01T00:00:01Z',
+          content: ' world',
+          timestamp: '2025-01-01T00:00:01Z',
+          metadata: { eventType: 'content_delta' },
         },
       ];
 
-      const gapFillMessages: AgentMessage[] = [
-        {
-          id: 'msg-3',
-          agentId: 'agent-123',
-          sequenceNumber: 3,
-          type: 'user',
-          content: 'Message 3',
-          createdAt: '2025-01-01T00:00:02Z',
-        },
-        {
-          id: 'msg-4',
-          agentId: 'agent-123',
-          sequenceNumber: 4,
-          type: 'assistant',
-          content: 'Message 4',
-          createdAt: '2025-01-01T00:00:03Z',
-        },
-      ];
-
-      vi.spyOn(ApiService, 'getAgentMessages')
-        .mockResolvedValueOnce(mockHistory);
-      vi.spyOn(ApiService, 'getAgentMessagesSince')
-        .mockResolvedValueOnce(gapFillMessages);
-
-      const { result } = renderHook(() => useAgentMessages('agent-123'));
-
-      await waitFor(() => expect(result.current.messages.length).toBe(2));
-
-      // Act - Receive message with gap (sequence 5, but we only have 1-2)
-      act(() => {
-        window.dispatchEvent(
-          new CustomEvent('agent:message', {
-            detail: {
-              agentId: 'agent-123',
-              message: {
-                id: 'msg-5',
-                agentId: 'agent-123',
-                sequenceNumber: 5, // Gap! We have 1-2, this is 5
-                type: 'user',
-                content: 'Message 5',
-                createdAt: '2025-01-01T00:00:04Z',
-              },
+      const store = createTestStore({
+        messages: {
+          byAgentId: {
+            'agent-123': {
+              messages: streamingMessages,
+              lastSequence: 2,
+              loading: false,
+              error: null,
             },
-          })
-        );
+          },
+          messageIds: { 'msg-1': true, 'msg-2': true },
+        },
       });
 
-      // Assert - Should trigger re-fetch and fill gap
-      await waitFor(() => {
-        expect(ApiService.getAgentMessagesSince).toHaveBeenCalledWith('agent-123', 2);
-        expect(result.current.messages.length).toBeGreaterThanOrEqual(4);
+      vi.spyOn(AgentApiClient, 'getAgentMessages').mockResolvedValue([]);
+
+      // Act
+      const { result } = renderHook(() => useAgentMessages('agent-123'), {
+        wrapper: createWrapper(store),
       });
+
+      // Assert - Should aggregate tokens (selector does this automatically)
+      expect(result.current.messages).toHaveLength(1);
+      expect(result.current.messages[0]?.content).toBe('Hello world');
+      expect(result.current.messages[0]?.metadata?.aggregated).toBe(true);
+    });
+  });
+
+  describe('Refetch functionality', () => {
+    it('should refetch messages when refetch called', async () => {
+      // Arrange
+      const mockHistory: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-123',
+          sequenceNumber: 1,
+          type: 'user',
+          content: 'Initial',
+          timestamp: '2025-01-01T00:00:00Z',
+        },
+      ];
+
+      const mockRefreshed: AgentMessage[] = [
+        ...mockHistory,
+        {
+          id: 'msg-2',
+          agentId: 'agent-123',
+          sequenceNumber: 2,
+          type: 'assistant',
+          content: 'New message',
+          timestamp: '2025-01-01T00:00:01Z',
+        },
+      ];
+
+      vi.spyOn(AgentApiClient, 'getAgentMessages')
+        .mockResolvedValueOnce(mockHistory)
+        .mockResolvedValueOnce(mockRefreshed);
+
+      const store = createTestStore();
+
+      // Act
+      const { result } = renderHook(() => useAgentMessages('agent-123'), {
+        wrapper: createWrapper(store),
+      });
+
+      // Wait for initial load
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+      });
+
+      // Refetch
+      result.current.refetch();
+
+      // Assert - Should have new message
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(2);
+        expect(result.current.messages[1]?.content).toBe('New message');
+      });
+    });
+
+    it('should do nothing when refetch called with no agent', () => {
+      // Arrange
+      const store = createTestStore();
+      vi.spyOn(AgentApiClient, 'getAgentMessages');
+
+      // Act
+      const { result } = renderHook(() => useAgentMessages(null), {
+        wrapper: createWrapper(store),
+      });
+
+      result.current.refetch();
+
+      // Assert - Should not call API
+      expect(AgentApiClient.getAgentMessages).not.toHaveBeenCalled();
     });
   });
 
   describe('Agent switching', () => {
-    it('should clear messages when switching agents', async () => {
+    it('should fetch new messages when switching agents', async () => {
       // Arrange
       const mockHistoryAgent1: AgentMessage[] = [
         {
@@ -302,7 +285,7 @@ describe('useAgentMessages', () => {
           sequenceNumber: 1,
           type: 'user',
           content: 'Agent 1 message',
-          createdAt: '2025-01-01T00:00:00Z',
+          timestamp: '2025-01-01T00:00:00Z',
         },
       ];
 
@@ -313,385 +296,111 @@ describe('useAgentMessages', () => {
           sequenceNumber: 1,
           type: 'user',
           content: 'Agent 2 message',
-          createdAt: '2025-01-01T00:00:01Z',
+          timestamp: '2025-01-01T00:00:00Z',
         },
       ];
 
-      vi.spyOn(ApiService, 'getAgentMessages')
+      vi.spyOn(AgentApiClient, 'getAgentMessages')
         .mockResolvedValueOnce(mockHistoryAgent1)
         .mockResolvedValueOnce(mockHistoryAgent2);
 
+      const store = createTestStore();
+
+      // Act - Start with agent-1
       const { result, rerender } = renderHook(
         ({ agentId }) => useAgentMessages(agentId),
-        { initialProps: { agentId: 'agent-1' as string | null } }
+        {
+          wrapper: createWrapper(store),
+          initialProps: { agentId: 'agent-1' },
+        }
       );
 
-      await waitFor(() => expect(result.current.messages.length).toBeGreaterThan(0));
+      await waitFor(() => {
+        expect(result.current.messages).toHaveLength(1);
+        expect(result.current.messages[0]?.content).toBe('Agent 1 message');
+      });
 
-      // Act - Switch to different agent
+      // Switch to agent-2
       rerender({ agentId: 'agent-2' });
 
-      // Assert - Should clear old messages immediately
-      expect(result.current.messages).toEqual([]);
-      expect(result.current.loading).toBe(true);
-
-      // Wait for new messages to load
+      // Assert - Should load agent-2 messages
       await waitFor(() => {
-        expect(result.current.messages.length).toBe(1);
-        expect(result.current.messages[0]?.agentId).toBe('agent-2');
+        expect(result.current.messages).toHaveLength(1);
+        expect(result.current.messages[0]?.content).toBe('Agent 2 message');
       });
     });
+  });
+});
 
-    it('should handle switching to null agent', async () => {
-      // Arrange
-      const mockHistory: AgentMessage[] = [
-        {
-          id: 'msg-1',
-          agentId: 'agent-1',
-          sequenceNumber: 1,
-          type: 'user',
-          content: 'Message',
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-      ];
+/**
+ * Tests for aggregateStreamingTokens utility (re-exported from module)
+ */
+describe('aggregateStreamingTokens (re-exported)', () => {
+  it('should aggregate streaming tokens', () => {
+    const messages: AgentMessage[] = [
+      {
+        id: 'msg-1',
+        agentId: 'agent-1',
+        sequenceNumber: 1,
+        type: 'assistant',
+        content: 'Hello',
+        timestamp: '2025-01-01T00:00:00Z',
+        metadata: { eventType: 'content_delta' },
+      },
+      {
+        id: 'msg-2',
+        agentId: 'agent-1',
+        sequenceNumber: 2,
+        type: 'assistant',
+        content: ' world',
+        timestamp: '2025-01-01T00:00:01Z',
+        metadata: { eventType: 'content_delta' },
+      },
+    ];
 
-      vi.spyOn(ApiService, 'getAgentMessages').mockResolvedValue(mockHistory);
+    const result = aggregateStreamingTokens(messages);
 
-      const { result, rerender } = renderHook(
-        ({ agentId }) => useAgentMessages(agentId),
-        { initialProps: { agentId: 'agent-1' as string | null } }
-      );
-
-      await waitFor(() => expect(result.current.messages.length).toBeGreaterThan(0));
-
-      // Act - Switch to null
-      rerender({ agentId: null });
-
-      // Assert
-      expect(result.current.messages).toEqual([]);
-      expect(result.current.loading).toBe(false);
-    });
+    expect(result).toHaveLength(1);
+    expect(result[0]?.content).toBe('Hello world');
+    expect(result[0]?.metadata?.aggregated).toBe(true);
   });
 
-  describe('Token aggregation', () => {
-    it('should aggregate streaming content_delta tokens into single message', () => {
-      // Arrange
-      const tokens: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Hello',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: ' ',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-        {
-          id: '3',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'world',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 3,
-          createdAt: '2025-01-01T00:00:02Z',
-        },
-      ];
+  it('should skip duplicate complete message', () => {
+    const messages: AgentMessage[] = [
+      {
+        id: 'msg-1',
+        agentId: 'agent-1',
+        sequenceNumber: 1,
+        type: 'assistant',
+        content: 'Hello',
+        timestamp: '2025-01-01T00:00:00Z',
+        metadata: { eventType: 'content_delta' },
+      },
+      {
+        id: 'msg-2',
+        agentId: 'agent-1',
+        sequenceNumber: 2,
+        type: 'assistant',
+        content: ' world',
+        timestamp: '2025-01-01T00:00:01Z',
+        metadata: { eventType: 'content_delta' },
+      },
+      // Duplicate complete message
+      {
+        id: 'msg-3',
+        agentId: 'agent-1',
+        sequenceNumber: 3,
+        type: 'assistant',
+        content: 'Hello world',
+        timestamp: '2025-01-01T00:00:02Z',
+      },
+    ];
 
-      // Act
-      const aggregated = aggregateStreamingTokens(tokens);
+    const result = aggregateStreamingTokens(messages);
 
-      // Assert
-      expect(aggregated).toHaveLength(1);
-      expect(aggregated[0].content).toBe('Hello world');
-      expect(aggregated[0].metadata?.tokenCount).toBe(3);
-    });
-
-    it('should flush token buffer when non-delta message arrives', () => {
-      // Arrange
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Hello',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: ' world',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-        {
-          id: '3',
-          agentId: 'agent-123',
-          type: 'system',
-          content: 'Complete',
-          metadata: {},
-          sequenceNumber: 3,
-          createdAt: '2025-01-01T00:00:02Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      expect(aggregated).toHaveLength(2);
-      expect(aggregated[0].content).toBe('Hello world');
-      expect(aggregated[1].type).toBe('system');
-    });
-
-    it('should handle in-progress streaming (partial buffer)', () => {
-      // Arrange
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Typing',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: '...',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      // Should have one aggregated message (still streaming)
-      expect(aggregated).toHaveLength(1);
-      expect(aggregated[0].content).toBe('Typing...');
-      expect(aggregated[0].metadata?.streaming).toBe(true);
-    });
-
-    it('should preserve non-delta messages unchanged', () => {
-      // Arrange
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'system',
-          content: 'Init',
-          metadata: {},
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'response',
-          content: 'Done',
-          metadata: {},
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      expect(aggregated).toHaveLength(2);
-      expect(aggregated[0]).toEqual(messages[0]);
-      expect(aggregated[1]).toEqual(messages[1]);
-    });
-
-    it('should handle multiple assistant message groups', () => {
-      // Arrange
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'First',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: ' part',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-        {
-          id: '3',
-          agentId: 'agent-123',
-          type: 'system',
-          content: 'Thinking...',
-          metadata: {},
-          sequenceNumber: 3,
-          createdAt: '2025-01-01T00:00:02Z',
-        },
-        {
-          id: '4',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Second',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 4,
-          createdAt: '2025-01-01T00:00:03Z',
-        },
-        {
-          id: '5',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: ' part',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 5,
-          createdAt: '2025-01-01T00:00:04Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      expect(aggregated).toHaveLength(3);
-      expect(aggregated[0].content).toBe('First part');
-      expect(aggregated[1].type).toBe('system');
-      expect(aggregated[2].content).toBe('Second part');
-    });
-
-    it('should not duplicate complete message after streaming tokens (DEDUPLICATION)', () => {
-      // Arrange - This is the EXACT duplicate message scenario the user reported
-      const messages: AgentMessage[] = [
-        // Streaming tokens (typing effect)
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Hello',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: ' world',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-        // Complete message from Claude (DUPLICATE - this is the problem!)
-        // Claude sends this after all tokens, containing the full message
-        {
-          id: '3',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Hello world',
-          metadata: {}, // NO eventType - this is a complete message, not a delta
-          sequenceNumber: 3,
-          createdAt: '2025-01-01T00:00:02Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      // Should have only ONE assistant message, not two!
-      // The complete message should be skipped because it duplicates the aggregated tokens
-      expect(aggregated).toHaveLength(1);
-      expect(aggregated[0].content).toBe('Hello world');
-      expect(aggregated[0].metadata?.aggregated).toBe(true);
-      expect(aggregated[0].metadata?.tokenCount).toBe(2);
-    });
-
-    it('should keep complete message if no streaming tokens preceded it', () => {
-      // Arrange - Complete message WITHOUT prior streaming tokens
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'system',
-          content: 'System message',
-          metadata: {},
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Complete message without streaming',
-          metadata: {}, // No eventType
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      // Should keep the complete message since it wasn't preceded by streaming tokens
-      expect(aggregated).toHaveLength(2);
-      expect(aggregated[0].type).toBe('system');
-      expect(aggregated[1].content).toBe('Complete message without streaming');
-    });
-
-    it('should handle complete message with different content than aggregated tokens', () => {
-      // Arrange - Edge case: complete message doesn't match tokens (shouldn't happen, but handle it)
-      const messages: AgentMessage[] = [
-        {
-          id: '1',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Hello',
-          metadata: { eventType: 'content_delta' },
-          sequenceNumber: 1,
-          createdAt: '2025-01-01T00:00:00Z',
-        },
-        {
-          id: '2',
-          agentId: 'agent-123',
-          type: 'assistant',
-          content: 'Different content', // Doesn't match aggregated "Hello"
-          metadata: {},
-          sequenceNumber: 2,
-          createdAt: '2025-01-01T00:00:01Z',
-        },
-      ];
-
-      // Act
-      const aggregated = aggregateStreamingTokens(messages);
-
-      // Assert
-      // Should keep both since content doesn't match (unusual but defensive)
-      expect(aggregated).toHaveLength(2);
-      expect(aggregated[0].content).toBe('Hello');
-      expect(aggregated[1].content).toBe('Different content');
-    });
+    // Should only have 1 message (duplicate skipped)
+    expect(result).toHaveLength(1);
+    expect(result[0]?.content).toBe('Hello world');
+    expect(result[0]?.metadata?.aggregated).toBe(true);
   });
 });

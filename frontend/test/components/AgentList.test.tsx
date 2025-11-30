@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { AgentList } from '@/components/AgentList';
-import type { Agent } from '@/types/agent.types';
+import type { Agent } from '@headless-agent-manager/client';
 
 /**
  * AgentList Component Tests

@@ -4,7 +4,7 @@ import { Provider } from 'react-redux';
 import { AgentOutput } from '@/components/AgentOutput';
 import { createMockStore, mockMessageFixtures } from '@headless-agent-manager/client/testing';
 import { messageReceived } from '@headless-agent-manager/client';
-import type { AgentMessage } from '@/types/agent.types';
+import type { AgentMessage } from '@headless-agent-manager/client';
 
 /**
  * AgentOutput Component Tests

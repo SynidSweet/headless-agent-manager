@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { selectors } from '@/store/store';
 import type { RootState } from '@/store/store';
-import type { AgentMessage } from '@/types/agent.types';
+import type { AgentMessage } from '@headless-agent-manager/client';
 
 interface AgentOutputProps {
   agentId: string | null;
@@ -154,7 +154,7 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
             </div>
           ) : (
             messages.map((message: AgentMessage) => {
-              const hasRaw = !!message.raw;
+              const hasRaw = !!message.metadata?.raw;
               return (
                 <div
                   key={message.id}
@@ -192,7 +192,7 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
                           </button>
                         </div>
                         <pre className="text-xs whitespace-pre-wrap break-words font-mono">
-                          {JSON.stringify(JSON.parse(message.raw!), null, 2)}
+                          {JSON.stringify(JSON.parse(message.metadata?.raw as string), null, 2)}
                         </pre>
                       </div>
                     </div>

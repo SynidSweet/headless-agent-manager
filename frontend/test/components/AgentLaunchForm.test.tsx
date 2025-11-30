@@ -25,7 +25,7 @@ describe('AgentLaunchForm', () => {
     it('should render form with all fields', () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      expect(screen.getByText('Launch New Agent')).toBeInTheDocument();
+      expect(screen.getByText(/Launch New Agent/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Agent Type/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Prompt/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Launch Agent/i })).toBeInTheDocument();

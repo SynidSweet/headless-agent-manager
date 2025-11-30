@@ -1,4 +1,4 @@
-import type { Agent } from '@/types/agent.types';
+import type { Agent } from '@headless-agent-manager/client';
 import { useDesignTokens } from '@/hooks/useDesignTokens';
 
 interface AgentListProps {

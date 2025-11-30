@@ -8,6 +8,7 @@ import type { Agent, AgentMessage } from '../../types';
 import type { AgentsState } from '../slices/agentsSlice';
 import type { MessagesState } from '../slices/messagesSlice';
 import type { ConnectionState } from '../slices/connectionSlice';
+import { aggregateStreamingTokens } from '../../utils/messageAggregation';
 
 /**
  * Root state interface
@@ -76,83 +77,6 @@ export const selectFailedAgents = createSelector(
 /**
  * Message selectors
  */
-
-/**
- * Aggregates streaming content_delta tokens into complete messages
- * This provides the "typing" effect in the UI
- *
- * @param messages - Raw messages from backend (includes individual tokens)
- * @returns Aggregated messages with tokens combined
- */
-function aggregateStreamingTokens(messages: AgentMessage[]): AgentMessage[] {
-  const aggregated: AgentMessage[] = [];
-  let currentBuffer: string[] = [];
-  let currentBufferStartMsg: AgentMessage | null = null;
-
-  for (const msg of messages) {
-    // Check if this is a streaming token
-    const isStreamingToken =
-      msg.type === 'assistant' &&
-      msg.metadata?.eventType === 'content_delta';
-
-    if (isStreamingToken) {
-      // Accumulate token into buffer
-      currentBuffer.push(String(msg.content));
-      if (!currentBufferStartMsg) {
-        currentBufferStartMsg = msg;
-      }
-    } else {
-      // Non-streaming message - flush accumulated tokens first
-      if (currentBuffer.length > 0 && currentBufferStartMsg) {
-        const aggregatedContent = currentBuffer.join('');
-
-        aggregated.push({
-          ...currentBufferStartMsg,
-          content: aggregatedContent,
-          metadata: {
-            ...currentBufferStartMsg.metadata,
-            aggregated: true,
-            tokenCount: currentBuffer.length,
-            streaming: false  // Complete (followed by non-delta message)
-          }
-        });
-
-        // Check if this message is a duplicate of the aggregated tokens
-        const isDuplicateComplete =
-          msg.type === 'assistant' &&
-          !msg.metadata?.eventType &&  // No eventType = complete message from Claude
-          String(msg.content).trim() === aggregatedContent.trim();
-
-        currentBuffer = [];
-        currentBufferStartMsg = null;
-
-        // Skip duplicate complete message
-        if (isDuplicateComplete) {
-          continue;
-        }
-      }
-
-      // Add the non-streaming message (if not a duplicate)
-      aggregated.push(msg);
-    }
-  }
-
-  // Flush remaining tokens (for in-progress streaming)
-  if (currentBuffer.length > 0 && currentBufferStartMsg) {
-    aggregated.push({
-      ...currentBufferStartMsg,
-      content: currentBuffer.join(''),
-      metadata: {
-        ...currentBufferStartMsg.metadata,
-        aggregated: true,
-        tokenCount: currentBuffer.length,
-        streaming: true  // Still streaming (no non-delta message after)
-      }
-    });
-  }
-
-  return aggregated;
-}
 
 // Memoized selector factory for messages by agent ID
 // This prevents unnecessary re-renders when the same agent is selected

@@ -103,3 +103,6 @@ export { createWebSocketMiddleware } from './store/middleware/websocketMiddlewar
 
 // API Client (for advanced usage)
 export { AgentApiClient } from './api/AgentApiClient';
+
+// Utilities
+export { aggregateStreamingTokens } from './utils/messageAggregation';
