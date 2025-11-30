@@ -12,7 +12,7 @@ export default defineConfig({
   },
   server: {
     host: '0.0.0.0', // Listen on all interfaces
-    port: 5173,
+    port: parseInt(process.env.VITE_PORT || '5173'),
     strictPort: true,
     hmr: {
       clientPort: 443, // For HTTPS proxy
@@ -21,7 +21,7 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: process.env.VITE_API_URL || 'http://localhost:3000',
         changeOrigin: true,
       },
     },

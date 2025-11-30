@@ -21,7 +21,8 @@ async function bootstrap(): Promise<void> {
   // Enable CORS for frontend integration
   app.enableCors({
     origin: [
-      'http://localhost:5173',
+      'http://localhost:5173',  // Production frontend
+      'http://localhost:5174',  // Development frontend
       'http://localhost:3000',
       'https://agents.petter.ai',  // Remote access via Vercel tunnel
     ],
