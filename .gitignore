@@ -21,6 +21,8 @@ lerna-debug.log*
 .env
 .env.local
 .env.*.local
+.env.development  # Dev-specific, should not be in prod
+.env.production   # Prod-specific, managed per environment
 
 # IDE
 .vscode/
