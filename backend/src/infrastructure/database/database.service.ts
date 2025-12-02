@@ -58,8 +58,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     console.log(`[DatabaseService#${instanceId}] CONNECTING to: ${this.dbPath}, NODE_ENV: ${process.env.NODE_ENV}`);
     this.db = new Database(this.dbPath, {
-      // ALWAYS enable verbose mode to debug message persistence issue
-      verbose: console.log,
+      // Only enable verbose mode when explicitly requested (not in tests)
+      verbose: process.env.DB_VERBOSE === 'true' ? console.log : undefined,
     });
 
     // Enable foreign keys
