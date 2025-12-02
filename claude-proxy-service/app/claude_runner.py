@@ -183,6 +183,18 @@ class ClaudeRunner:
         if "model" in options:
             parts.extend(["--model", options["model"]])
 
+        # Add MCP configuration if provided
+        if "mcp_config" in options:
+            # Escape JSON string for shell
+            mcp_json = options["mcp_config"]
+            # Use single quotes to wrap the JSON string for shell safety
+            escaped_json = mcp_json.replace("'", "'\\''")  # Escape any single quotes in JSON
+            parts.extend(["--mcp-config", f"'{escaped_json}'"])
+
+            # Add strict flag if enabled
+            if options.get("mcp_strict", False):
+                parts.append("--strict-mcp-config")
+
         return " ".join(parts)
 
     def _prepare_environment(self) -> Dict[str, str]:

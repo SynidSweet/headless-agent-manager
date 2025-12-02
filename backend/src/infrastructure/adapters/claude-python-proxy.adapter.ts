@@ -201,7 +201,7 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
 
     try {
       // Build request body
-      const requestBody: Record<string, string> = {
+      const requestBody: Record<string, any> = {
         prompt: session.prompt,
       };
 
@@ -215,6 +215,15 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
 
       if (session.configuration.model) {
         requestBody.model = session.configuration.model;
+      }
+
+      if (session.configuration.mcp) {
+        // Convert MCP configuration to JSON string for Python proxy
+        requestBody.mcp_config = session.configuration.mcp.toClaudeConfigJSON();
+
+        if (session.configuration.mcp.strict) {
+          requestBody.mcp_strict = true;
+        }
       }
 
       // Call Python proxy stream endpoint

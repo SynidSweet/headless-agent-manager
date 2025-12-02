@@ -3,7 +3,7 @@ import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentStatus } from '@domain/value-objects/agent-status.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
-import { Session } from '@domain/value-objects/session.vo';
+import { Session, AgentConfiguration } from '@domain/value-objects/session.vo';
 import { LaunchRequest } from '@domain/value-objects/launch-request.vo';
 import { IAgentFactory } from '@application/ports/agent-factory.port';
 import { IAgentRepository } from '@application/ports/agent-repository.port';
@@ -56,6 +56,13 @@ export class AgentOrchestrationService {
       hasInstructions: !!dto.configuration?.instructions,
     });
 
+    // Convert DTO to domain configuration (validates and converts MCP)
+    // Handle both DTO instances and plain objects
+    const domainConfiguration =
+      typeof (dto as any).toAgentConfiguration === 'function'
+        ? dto.toAgentConfiguration()
+        : this.convertPlainConfigToDomain(dto.configuration);
+
     // Convert DTO to LaunchRequest
     const request = LaunchRequest.create({
       agentType: dto.type as AgentType,
@@ -63,11 +70,44 @@ export class AgentOrchestrationService {
       instructions: dto.configuration?.instructions,
       sessionId: dto.configuration?.sessionId,
       metadata: dto.configuration?.metadata,
-      configuration: dto.configuration as any, // DTO to domain type conversion
+      configuration: domainConfiguration, // Validated domain configuration with MCP
     });
 
     // Enqueue the request (will be processed sequentially)
     return this.launchQueue.enqueue(request);
+  }
+
+  /**
+   * Convert plain configuration object to domain configuration
+   * Used when DTO is a plain object without methods
+   */
+  private convertPlainConfigToDomain(config: any): AgentConfiguration {
+    if (!config) {
+      return {};
+    }
+
+    const domainConfig: AgentConfiguration = {};
+
+    if (config.sessionId) domainConfig.sessionId = config.sessionId;
+    if (config.outputFormat) domainConfig.outputFormat = config.outputFormat;
+    if (config.customArgs) domainConfig.customArgs = config.customArgs;
+    if (config.timeout) domainConfig.timeout = config.timeout;
+    if (config.allowedTools) domainConfig.allowedTools = config.allowedTools;
+    if (config.disallowedTools) domainConfig.disallowedTools = config.disallowedTools;
+    if (config.workingDirectory) domainConfig.workingDirectory = config.workingDirectory;
+    if (config.conversationName) domainConfig.conversationName = config.conversationName;
+    if (config.model) domainConfig.model = config.model;
+
+    // Convert MCP DTO to domain object
+    if (config.mcp) {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+      domainConfig.mcp = McpConfiguration.create({
+        servers: config.mcp.servers || [],
+        strict: config.mcp.strict,
+      });
+    }
+
+    return domainConfig;
   }
 
   /**

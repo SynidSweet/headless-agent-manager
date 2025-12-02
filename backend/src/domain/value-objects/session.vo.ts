@@ -1,4 +1,5 @@
 import { DomainException } from '@domain/exceptions/domain.exception';
+import { McpConfiguration } from './mcp-configuration.vo';
 
 /**
  * Agent Configuration
@@ -17,6 +18,7 @@ export interface AgentConfiguration {
   workingDirectory?: string; // Working directory for the agent process
   conversationName?: string; // Human-readable name for the session (max 100 chars)
   model?: string; // Claude model to use (e.g., 'claude-sonnet-4-5-20250929')
+  mcp?: McpConfiguration; // MCP server configuration for the agent
 }
 
 /**

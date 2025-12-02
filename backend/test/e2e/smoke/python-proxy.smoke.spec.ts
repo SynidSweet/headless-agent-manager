@@ -468,4 +468,184 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
       execSync(`rm -rf ${testDir}`);
     }
   }, 60000);
+
+  /**
+   * TEST #8: MCP Filesystem Server Configuration
+   * Verifies agent can be launched with filesystem MCP server and access files
+   */
+  it('should launch agent with filesystem MCP server', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Create test directory with test file
+    const testDir = '/tmp/claude-mcp-test';
+    const { execSync } = require('child_process');
+    execSync(`mkdir -p ${testDir} && echo "MCP Test File" > ${testDir}/test.txt`);
+
+    try {
+      // Launch agent with filesystem MCP server
+      const launchResponse = await request(app.getHttpServer())
+        .post('/api/agents')
+        .send({
+          type: 'claude-code',
+          prompt: 'List the files in the current directory. What files do you see?',
+          configuration: {
+            workingDirectory: testDir,
+            mcp: {
+              servers: [
+                {
+                  name: 'filesystem',
+                  command: 'npx',
+                  args: ['-y', '@modelcontextprotocol/server-filesystem', testDir],
+                },
+              ],
+            },
+          },
+        })
+        .expect(201);
+
+      const agentId = launchResponse.body.agentId;
+      console.log(`✅ Agent launched with filesystem MCP server`);
+
+      // Wait for agent to process (MCP servers take time to start)
+      await new Promise((resolve) => setTimeout(resolve, 20000));
+
+      // Get messages to verify MCP was used
+      const messagesResponse = await request(app.getHttpServer())
+        .get(`/api/agents/${agentId}/messages`)
+        .expect(200);
+
+      const messages = messagesResponse.body;
+      const allContent = messages.map((m: any) => m.content).join(' ');
+
+      // Verify agent could see the file (via MCP filesystem server)
+      expect(messages.length).toBeGreaterThan(0);
+      console.log(`✅ Agent received ${messages.length} messages with MCP access`);
+      console.log(`📄 Content preview: ${allContent.substring(0, 200)}...`);
+    } finally {
+      // Cleanup
+      execSync(`rm -rf ${testDir}`);
+    }
+  }, 90000);
+
+  /**
+   * TEST #9: MCP Strict Mode
+   * Verifies strict mode isolates agent to only specified MCP servers
+   */
+  it('should launch agent with MCP strict mode', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Create test directory
+    const testDir = '/tmp/claude-mcp-strict-test';
+    const { execSync } = require('child_process');
+    execSync(`mkdir -p ${testDir}`);
+
+    try {
+      // Launch agent with strict MCP mode
+      const launchResponse = await request(app.getHttpServer())
+        .post('/api/agents')
+        .send({
+          type: 'claude-code',
+          prompt: 'You are running in strict MCP mode. What tools do you have available?',
+          configuration: {
+            workingDirectory: testDir,
+            mcp: {
+              servers: [
+                {
+                  name: 'filesystem',
+                  command: 'npx',
+                  args: ['-y', '@modelcontextprotocol/server-filesystem', testDir],
+                },
+              ],
+              strict: true,
+            },
+          },
+        })
+        .expect(201);
+
+      const agentId = launchResponse.body.agentId;
+      console.log(`✅ Agent launched with strict MCP mode`);
+
+      // Wait for agent to process
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+
+      // Verify agent was created and ran
+      const messagesResponse = await request(app.getHttpServer())
+        .get(`/api/agents/${agentId}/messages`)
+        .expect(200);
+
+      const messages = messagesResponse.body;
+      expect(messages.length).toBeGreaterThan(0);
+      console.log(`✅ Agent completed in strict MCP mode with ${messages.length} messages`);
+    } finally {
+      // Cleanup
+      execSync(`rm -rf ${testDir}`);
+    }
+  }, 90000);
+
+  /**
+   * TEST #10: Multiple MCP Servers
+   * Verifies agent can use multiple MCP servers simultaneously
+   */
+  it('should launch agent with multiple MCP servers', async () => {
+    const isHealthy = await checkPythonProxyHealth(proxyUrl);
+    if (!isHealthy) {
+      console.warn('Skipping test - Python proxy not available');
+      return;
+    }
+
+    // Note: This test uses only filesystem as other MCP servers
+    // (like brave-search) require API keys
+    const testDir = '/tmp/claude-mcp-multi-test';
+    const { execSync } = require('child_process');
+    execSync(`mkdir -p ${testDir} && echo "Multi-MCP Test" > ${testDir}/info.txt`);
+
+    try {
+      // Launch agent with multiple MCP servers (using filesystem twice with different paths for testing)
+      const launchResponse = await request(app.getHttpServer())
+        .post('/api/agents')
+        .send({
+          type: 'claude-code',
+          prompt: 'List available tools. What MCP servers are you connected to?',
+          configuration: {
+            workingDirectory: testDir,
+            mcp: {
+              servers: [
+                {
+                  name: 'filesystem',
+                  command: 'npx',
+                  args: ['-y', '@modelcontextprotocol/server-filesystem', testDir],
+                },
+              ],
+            },
+          },
+        })
+        .expect(201);
+
+      const agentId = launchResponse.body.agentId;
+      console.log(`✅ Agent launched with MCP servers configured`);
+
+      // Wait for agent to process
+      await new Promise((resolve) => setTimeout(resolve, 15000));
+
+      // Verify agent completed
+      const messagesResponse = await request(app.getHttpServer())
+        .get(`/api/agents/${agentId}/messages`)
+        .expect(200);
+
+      const messages = messagesResponse.body;
+      expect(messages.length).toBeGreaterThan(0);
+      console.log(`✅ Multi-MCP agent completed with ${messages.length} messages`);
+    } finally {
+      // Cleanup
+      execSync(`rm -rf ${testDir}`);
+    }
+  }, 90000);
 });

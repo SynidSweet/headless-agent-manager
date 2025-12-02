@@ -815,6 +815,234 @@ it('should launch agent in custom working directory', async () => {
 });
 ```
 
+### MCP (Model Context Protocol) Configuration
+
+**Feature**: Configure MCP servers for enhanced agent capabilities
+
+**Available Since**: 2025-12-02
+
+**Description:**
+The `mcp` configuration option allows you to dynamically configure MCP (Model Context Protocol) servers when launching agents. This enables agents to access external tools and services like filesystems, web search, databases, and custom APIs through standardized MCP servers.
+
+**API Usage:**
+```typescript
+POST /api/agents
+{
+  "type": "claude-code",
+  "prompt": "List files and search the web",
+  "configuration": {
+    "mcp": {
+      "servers": [
+        {
+          "name": "filesystem",
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path"]
+        },
+        {
+          "name": "brave-search",
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "env": {
+            "BRAVE_API_KEY": "your-api-key"
+          }
+        }
+      ],
+      "strict": true
+    }
+  }
+}
+```
+
+**MCP Configuration Structure:**
+```typescript
+{
+  servers: [
+    {
+      name: string;              // Unique server identifier (alphanumeric + hyphens/underscores)
+      command: string;           // Command to start the MCP server
+      args?: string[];           // Optional command arguments
+      env?: Record<string, string>; // Optional environment variables
+      transport?: 'stdio' | 'http' | 'sse'; // Transport type (default: 'stdio')
+    }
+  ],
+  strict?: boolean;  // If true, only uses specified servers (ignores global MCP config)
+}
+```
+
+**Use Cases:**
+
+1. **File System Access**: Give agents filesystem access
+   ```json
+   {
+     "mcp": {
+       "servers": [{
+         "name": "filesystem",
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/projects"]
+       }]
+     }
+   }
+   ```
+
+2. **Web Search Integration**: Enable web search capabilities
+   ```json
+   {
+     "mcp": {
+       "servers": [{
+         "name": "brave-search",
+         "command": "npx",
+         "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+         "env": { "BRAVE_API_KEY": "your-key" }
+       }]
+     }
+   }
+   ```
+
+3. **Multiple MCP Servers**: Combine multiple tools
+   ```json
+   {
+     "mcp": {
+       "servers": [
+         {
+           "name": "filesystem",
+           "command": "npx",
+           "args": ["-y", "@modelcontextprotocol/server-filesystem"]
+         },
+         {
+           "name": "github",
+           "command": "npx",
+           "args": ["-y", "@modelcontextprotocol/server-github"],
+           "env": { "GITHUB_TOKEN": "gh_token" }
+         }
+       ]
+     }
+   }
+   ```
+
+4. **Strict Mode (Isolated)**: Only use specified MCP servers
+   ```json
+   {
+     "mcp": {
+       "servers": [{ "name": "safe-tool", "command": "npx" }],
+       "strict": true
+     }
+   }
+   ```
+
+**Data Flow:**
+```
+Client Request (configuration.mcp)
+    ↓
+LaunchAgentDto → McpConfigurationDto (validation)
+    ↓
+Domain Layer → McpConfiguration value object
+    ↓
+Session.configuration.mcp
+    ↓
+ClaudePythonProxyAdapter → toClaudeConfigJSON()
+    ↓
+Python Proxy Service → mcp_config (JSON string) + mcp_strict (boolean)
+    ↓
+ClaudeRunner → _build_command()
+    ↓
+Claude CLI: --mcp-config '{"mcpServers":{...}}' --strict-mcp-config
+    ↓
+Agent has access to MCP servers ✓
+```
+
+**Architecture (Clean Architecture + SOLID):**
+- **Domain Layer**: `McpServerConfig.vo.ts`, `McpConfiguration.vo.ts` (immutable value objects)
+- **Application Layer**: `McpServerDto`, `McpConfigurationDto` (DTO validation)
+- **Infrastructure Layer**: `claude-python-proxy.adapter.ts` (extracts and passes MCP)
+- **Python Service**: `main.py`, `claude_runner.py` (builds CLI flags)
+
+**Test Coverage:**
+- **Unit Tests**: 55 tests (Domain, DTO, Adapter layers)
+- **Integration Tests**: Full flow validation
+- **Test Files**:
+  - `mcp-server-config.vo.spec.ts` (22 tests)
+  - `mcp-configuration.vo.spec.ts` (25 tests)
+  - `session.vo.spec.ts` (3 MCP tests)
+  - `claude-python-proxy.adapter.spec.ts` (5 MCP tests)
+
+**Validation Rules:**
+- ✅ Server names must be alphanumeric with hyphens/underscores only
+- ✅ Server names must be unique (no duplicates)
+- ✅ Command cannot be empty
+- ✅ Transport must be 'stdio', 'http', or 'sse'
+- ✅ Environment variables must be valid key-value pairs
+
+**Error Handling:**
+```typescript
+// Invalid server name
+❌ { "name": "invalid@name!", "command": "npx" }
+// Error: Server name must contain only alphanumeric characters, hyphens, and underscores
+
+// Duplicate server names
+❌ { "servers": [
+  { "name": "filesystem", "command": "cmd1" },
+  { "name": "filesystem", "command": "cmd2" }
+]}
+// Error: Duplicate MCP server name: filesystem
+
+// Empty command
+❌ { "name": "test", "command": "" }
+// Error: Command cannot be empty
+```
+
+**Backward Compatibility:**
+- ✅ MCP is **optional** - agents work without MCP configuration
+- ✅ All existing code continues to work unchanged
+- ✅ No breaking changes to API or data models
+
+**Security Considerations:**
+- **Strict Mode**: Use `strict: true` in production to isolate agents from global MCP servers
+- **Environment Variables**: API keys passed through `env` field (consider encryption for storage)
+- **Validation**: All MCP config validated in domain layer before execution
+- **Shell Safety**: JSON properly escaped in Python subprocess
+
+**Performance:**
+- **Startup Overhead**: MCP servers add ~100-500ms to agent startup time
+- **Memory**: Each MCP server is a separate process
+- **Recommendation**: Only configure MCP servers that are actually needed
+
+**Example with Combined Configuration:**
+```typescript
+POST /api/agents
+{
+  "type": "claude-code",
+  "prompt": "Analyze project files and search for best practices",
+  "configuration": {
+    "workingDirectory": "/home/user/project",
+    "model": "claude-sonnet-4-5-20250929",
+    "conversationName": "Project Analysis",
+    "mcp": {
+      "servers": [
+        {
+          "name": "filesystem",
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-filesystem", "/home/user/project"]
+        },
+        {
+          "name": "brave-search",
+          "command": "npx",
+          "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+          "env": { "BRAVE_API_KEY": "your-key" }
+        }
+      ],
+      "strict": true
+    }
+  }
+}
+```
+
+**Implementation Guide:**
+See `/MCP_FEATURE_DESIGN.md` for complete TDD implementation guide including:
+- Detailed architecture design
+- SOLID principles application
+- Test-driven development approach
+- All 7 implementation phases
+
 ---
 
 ## Common Tasks

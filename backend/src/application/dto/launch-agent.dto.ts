@@ -1,6 +1,28 @@
 import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
 import { AgentConfiguration } from '@domain/value-objects/session.vo';
+import { McpConfiguration } from '@domain/value-objects/mcp-configuration.vo';
+
+/**
+ * MCP Server DTO
+ * Configuration for a single MCP server
+ */
+export interface McpServerDto {
+  name: string;
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  transport?: 'stdio' | 'http' | 'sse';
+}
+
+/**
+ * MCP Configuration DTO
+ * Collection of MCP servers to configure for the agent
+ */
+export interface McpConfigurationDto {
+  servers?: McpServerDto[];
+  strict?: boolean;
+}
 
 /**
  * Agent Configuration DTO
@@ -73,6 +95,12 @@ export interface AgentConfigurationDto {
    * @default Uses Claude CLI default model
    */
   model?: string;
+
+  /**
+   * MCP (Model Context Protocol) server configuration
+   * Allows the agent to connect to MCP servers for additional tools and capabilities
+   */
+  mcp?: McpConfigurationDto;
 }
 
 /**
@@ -193,6 +221,14 @@ export class LaunchAgentDto {
 
     if (this.configuration.model) {
       config.model = this.configuration.model;
+    }
+
+    if (this.configuration.mcp) {
+      // Convert MCP DTO to domain object
+      config.mcp = McpConfiguration.create({
+        servers: this.configuration.mcp.servers || [],
+        strict: this.configuration.mcp.strict,
+      });
     }
 
     return config;

@@ -38,6 +38,8 @@ class StartAgentRequest(BaseModel):
     session_id: Optional[str] = None
     model: Optional[str] = None
     working_directory: Optional[str] = None
+    mcp_config: Optional[str] = None  # JSON string of MCP configuration
+    mcp_strict: Optional[bool] = False  # Whether to use --strict-mcp-config
 
 
 class StartAgentResponse(BaseModel):
@@ -76,13 +78,17 @@ async def start_agent(request: StartAgentRequest) -> StartAgentResponse:
     """
     try:
         # Build options
-        options: Dict[str, str] = {}
+        options: Dict[str, any] = {}
         if request.session_id:
             options["session_id"] = request.session_id
         if request.model:
             options["model"] = request.model
         if request.working_directory:
             options["working_directory"] = request.working_directory
+        if request.mcp_config:
+            options["mcp_config"] = request.mcp_config
+        if request.mcp_strict:
+            options["mcp_strict"] = request.mcp_strict
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)
@@ -108,13 +114,17 @@ async def stream_agent(request: StartAgentRequest) -> StreamingResponse:
     """
     try:
         # Build options
-        options: Dict[str, str] = {}
+        options: Dict[str, any] = {}
         if request.session_id:
             options["session_id"] = request.session_id
         if request.model:
             options["model"] = request.model
         if request.working_directory:
             options["working_directory"] = request.working_directory
+        if request.mcp_config:
+            options["mcp_config"] = request.mcp_config
+        if request.mcp_strict:
+            options["mcp_strict"] = request.mcp_strict
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)

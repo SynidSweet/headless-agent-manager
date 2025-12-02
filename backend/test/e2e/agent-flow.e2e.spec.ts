@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '@/app.module';
 import { LaunchAgentDto } from '@application/dto/launch-agent.dto';
@@ -24,6 +24,13 @@ describe('Agent Flow (E2E)', () => {
 
     // Apply same configuration as main.ts
     app.enableCors();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      })
+    );
     app.useGlobalFilters(new DomainExceptionFilter());
     app.setGlobalPrefix('api');
 

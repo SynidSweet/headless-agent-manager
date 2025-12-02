@@ -347,4 +347,69 @@ describe('Session Value Object', () => {
       expect(session.configuration).toEqual(config);
     });
   });
+
+  describe('MCP configuration support', () => {
+    it('should create session with MCP configuration', () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'filesystem',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', '/path'],
+          },
+        ],
+      });
+
+      const config: AgentConfiguration = {
+        mcp: mcpConfig,
+      };
+
+      const session = Session.create('test prompt', config);
+
+      expect(session.configuration.mcp).toBeDefined();
+      expect(session.configuration.mcp?.servers.size).toBe(1);
+      expect(session.configuration.mcp?.hasServer('filesystem')).toBe(true);
+    });
+
+    it('should create session without MCP configuration', () => {
+      const config: AgentConfiguration = {
+        outputFormat: 'stream-json',
+      };
+
+      const session = Session.create('test prompt', config);
+
+      expect(session.configuration.mcp).toBeUndefined();
+    });
+
+    it('should include MCP in session configuration', () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'brave-search',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-brave-search'],
+            env: {
+              BRAVE_API_KEY: 'test-key',
+            },
+          },
+        ],
+        strict: true,
+      });
+
+      const config: AgentConfiguration = {
+        mcp: mcpConfig,
+        workingDirectory: '/path/to/project',
+      };
+
+      const session = Session.create('test prompt', config);
+
+      expect(session.configuration.mcp).toBe(mcpConfig);
+      expect(session.configuration.mcp?.strict).toBe(true);
+      expect(session.configuration.workingDirectory).toBe('/path/to/project');
+    });
+  });
 });

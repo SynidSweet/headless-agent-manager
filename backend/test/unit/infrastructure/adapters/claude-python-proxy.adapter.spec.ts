@@ -330,4 +330,181 @@ describe('ClaudePythonProxyAdapter', () => {
       );
     });
   });
+
+  describe('MCP configuration support', () => {
+    it('should include MCP config in request when provided', async () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'filesystem',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem', '/path'],
+          },
+        ],
+      });
+
+      const session = Session.create('test', { mcp: mcpConfig });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.mcp_config).toBeDefined();
+      expect(typeof callBody.mcp_config).toBe('string');
+
+      // Verify it's valid JSON
+      const mcpJson = JSON.parse(callBody.mcp_config);
+      expect(mcpJson).toHaveProperty('mcpServers');
+      expect(mcpJson.mcpServers).toHaveProperty('filesystem');
+    });
+
+    it('should include MCP strict flag when enabled', async () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'test-server',
+            command: 'npx',
+          },
+        ],
+        strict: true,
+      });
+
+      const session = Session.create('test', { mcp: mcpConfig });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.mcp_strict).toBe(true);
+    });
+
+    it('should not include MCP fields when not configured', async () => {
+      const session = Session.create('test', {});
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      expect(callBody.mcp_config).toBeUndefined();
+      expect(callBody.mcp_strict).toBeUndefined();
+    });
+
+    it('should include multiple MCP servers in config', async () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'filesystem',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-filesystem'],
+          },
+          {
+            name: 'brave-search',
+            command: 'npx',
+            args: ['-y', '@modelcontextprotocol/server-brave-search'],
+            env: {
+              BRAVE_API_KEY: 'test-key',
+            },
+          },
+        ],
+      });
+
+      const session = Session.create('test', { mcp: mcpConfig });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      const mcpJson = JSON.parse(callBody.mcp_config);
+
+      expect(Object.keys(mcpJson.mcpServers)).toHaveLength(2);
+      expect(mcpJson.mcpServers).toHaveProperty('filesystem');
+      expect(mcpJson.mcpServers).toHaveProperty('brave-search');
+    });
+
+    it('should include MCP server environment variables', async () => {
+      const { McpConfiguration } = require('@domain/value-objects/mcp-configuration.vo');
+
+      const mcpConfig = McpConfiguration.create({
+        servers: [
+          {
+            name: 'api-server',
+            command: 'npx',
+            env: {
+              API_KEY: 'secret-key',
+              DEBUG: 'true',
+            },
+          },
+        ],
+      });
+
+      const session = Session.create('test', { mcp: mcpConfig });
+
+      const mockResponse = {
+        ok: true,
+        body: {
+          getReader: () => ({
+            read: jest.fn().mockResolvedValue({ done: true, value: undefined }),
+          }),
+        },
+      } as any;
+
+      mockFetch.mockResolvedValue(mockResponse);
+
+      await adapter.start(session);
+
+      const callBody = JSON.parse(mockFetch.mock.calls[0]![1]!.body as string);
+      const mcpJson = JSON.parse(callBody.mcp_config);
+
+      expect(mcpJson.mcpServers['api-server'].env).toEqual({
+        API_KEY: 'secret-key',
+        DEBUG: 'true',
+      });
+    });
+  });
 });
