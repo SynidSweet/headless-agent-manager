@@ -19,6 +19,7 @@ describe('AgentOrchestrationService', () => {
   let mockStreamingService: jest.Mocked<StreamingService>;
   let mockLaunchQueue: jest.Mocked<IAgentLaunchQueue>;
   let mockInstructionHandler: jest.Mocked<IInstructionHandler>;
+  let mockMessageService: any;
 
   beforeEach(() => {
     // Create mock agent runner
@@ -66,6 +67,21 @@ describe('AgentOrchestrationService', () => {
       restoreEnvironment: jest.fn().mockResolvedValue(undefined),
     };
 
+    // Create mock message service
+    mockMessageService = {
+      saveMessage: jest.fn().mockResolvedValue({
+        id: 'msg-uuid',
+        agentId: 'agent-id',
+        sequenceNumber: 1,
+        type: 'user',
+        role: 'user',
+        content: 'test',
+        createdAt: new Date().toISOString(),
+      }),
+      findByAgentId: jest.fn().mockResolvedValue([]),
+      findByAgentIdSince: jest.fn().mockResolvedValue([]),
+    };
+
     // Create service with mocks
     service = new AgentOrchestrationService(
       mockAgentFactory,
@@ -73,6 +89,7 @@ describe('AgentOrchestrationService', () => {
       mockStreamingService,
       mockLaunchQueue,
       mockInstructionHandler,
+      mockMessageService
     );
   });
 

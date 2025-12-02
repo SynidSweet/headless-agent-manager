@@ -63,7 +63,7 @@ describe('ClaudeInstructionHandler', () => {
 
       mockFileSystem.exists
         .mockResolvedValueOnce(false) // User file doesn't exist
-        .mockResolvedValueOnce(true);  // Project file exists
+        .mockResolvedValueOnce(true); // Project file exists
       mockFileSystem.readFile.mockResolvedValue('Project content');
 
       const backup = await handler.prepareEnvironment(instructions);
@@ -83,7 +83,7 @@ describe('ClaudeInstructionHandler', () => {
       const instructions = 'Custom instructions';
 
       mockFileSystem.exists
-        .mockResolvedValueOnce(true)  // User file exists
+        .mockResolvedValueOnce(true) // User file exists
         .mockResolvedValueOnce(false); // Project file doesn't exist
       mockFileSystem.readFile.mockResolvedValue('User content');
 
@@ -129,9 +129,7 @@ describe('ClaudeInstructionHandler', () => {
     it('should throw error if file operations fail', async () => {
       const instructions = 'Custom instructions';
 
-      mockFileSystem.exists.mockRejectedValue(
-        new Error('Filesystem error')
-      );
+      mockFileSystem.exists.mockRejectedValue(new Error('Filesystem error'));
 
       await expect(handler.prepareEnvironment(instructions)).rejects.toThrow(
         'Failed to prepare instruction environment'
@@ -194,9 +192,7 @@ describe('ClaudeInstructionHandler', () => {
         backup.projectClaudePath,
         'Original project content'
       );
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'Environment restored from backup'
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith('Environment restored from backup');
     });
 
     it('should only restore user file if project was not backed up', async () => {
@@ -244,9 +240,7 @@ describe('ClaudeInstructionHandler', () => {
         timestamp: new Date(),
       };
 
-      mockFileSystem.writeFile.mockRejectedValue(
-        new Error('Write failed')
-      );
+      mockFileSystem.writeFile.mockRejectedValue(new Error('Write failed'));
 
       await expect(handler.restoreEnvironment(backup)).rejects.toThrow(
         'Failed to restore environment'
@@ -258,9 +252,7 @@ describe('ClaudeInstructionHandler', () => {
       await handler.restoreEnvironment(null);
 
       expect(mockFileSystem.writeFile).not.toHaveBeenCalled();
-      expect(mockLogger.debug).toHaveBeenCalledWith(
-        'No backup to restore'
-      );
+      expect(mockLogger.debug).toHaveBeenCalledWith('No backup to restore');
     });
 
     it('should restore empty strings correctly', async () => {
@@ -274,14 +266,8 @@ describe('ClaudeInstructionHandler', () => {
 
       await handler.restoreEnvironment(backup);
 
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        backup.userClaudePath,
-        ''
-      );
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        backup.projectClaudePath,
-        ''
-      );
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(backup.userClaudePath, '');
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(backup.projectClaudePath, '');
     });
 
     it('should log restoration details', async () => {
@@ -321,8 +307,8 @@ describe('ClaudeInstructionHandler', () => {
 
       // Check project file path is in current directory
       const calls = (mockFileSystem.exists as jest.Mock).mock.calls;
-      const projectPathCall = calls.find(call =>
-        !call[0].includes('.claude') && call[0].endsWith('CLAUDE.md')
+      const projectPathCall = calls.find(
+        (call) => !call[0].includes('.claude') && call[0].endsWith('CLAUDE.md')
       );
       expect(projectPathCall).toBeDefined();
     });

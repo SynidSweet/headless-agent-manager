@@ -10,9 +10,50 @@ Redux state management client for headless AI agent orchestration.
 - 🔄 **Real-time WebSocket updates** - Automatic message streaming
 - 🧩 **Framework-agnostic** - Works in any JavaScript environment
 - 📦 **Type-safe** - Full TypeScript support
-- 🧪 **Well-tested** - 106 tests with 95%+ coverage
+- 🧪 **Well-tested** - 130 tests with 95%+ coverage (115 unit + 15 ESLint rule)
 - 🛠️ **Reusable utilities** - Message aggregation, gap detection
 - 🎨 **Clean Architecture** - Proper separation of concerns
+
+---
+
+## ⚠️ CRITICAL: Always Use Aggregated Message Selectors
+
+**The #1 mistake when using this module is accessing raw message state directly.**
+
+### Why This Matters
+
+Claude CLI sends messages in **two forms**:
+1. **Streaming tokens** - Individual characters as they're typed: `"H"`, `"e"`, `"l"`, `"l"`, `"o"`
+2. **Complete message** - Full message after streaming: `"Hello"`
+
+**Without aggregation**, your UI shows: `"H" "e" "l" "l" "o" "Hello"` ❌ **DUPLICATES!**
+
+**With aggregation**, your UI shows: `"Hello"` ✅ **Clean and correct!**
+
+### ❌ WRONG - Direct State Access (Will Cause Duplicates)
+
+```typescript
+// DON'T DO THIS! Bypasses aggregation
+const messages = useSelector(state =>
+  state.messages.byAgentId[agentId]?.messages
+);
+// Result: Shows streaming tokens + complete message = DUPLICATES in UI!
+```
+
+### ✅ CORRECT - Use Aggregated Selectors
+
+```typescript
+import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+
+const messages = useSelector(state =>
+  selectAggregatedMessagesForAgent(state, agentId)
+);
+// Result: Clean, deduplicated messages ready for display
+```
+
+**The selector name makes it obvious** - if it doesn't say "Aggregated", you're doing it wrong!
+
+---
 
 ## Installation
 
@@ -163,19 +204,53 @@ const completed = useSelector(selectCompletedAgents);
 const failed = useSelector(selectFailedAgents);
 ```
 
-#### Message Selectors
+#### Message Selectors (⭐ RECOMMENDED)
+
+**Always use aggregated selectors for UI display:**
 
 ```typescript
+import {
+  selectAggregatedMessagesForAgent,
+  selectAggregatedMessagesForSelectedAgent,
+} from '@headless-agent-manager/client';
+
+// ✅ RECOMMENDED: For specific agent
 const messages = useSelector((state) =>
-  selectMessagesForAgent(state, agentId)
+  selectAggregatedMessagesForAgent(state, agentId)
 );
-const selectedMessages = useSelector(selectMessagesForSelectedAgent);
+
+// ✅ RECOMMENDED: For selected agent
+const messages = useSelector(selectAggregatedMessagesForSelectedAgent);
+
+// Other selectors
 const lastSeq = useSelector((state) =>
   selectLastSequenceForAgent(state, agentId)
 );
 ```
 
-**Note**: Message selectors automatically aggregate streaming tokens for typing effect.
+**What "Aggregated" means:**
+- ✅ Streaming tokens combined into complete messages
+- ✅ Duplicate complete messages removed
+- ✅ Proper message ordering maintained
+- ✅ Ready for UI display
+
+**Legacy aliases (deprecated but still work):**
+```typescript
+// These still work but are deprecated
+selectMessagesForAgent → Use selectAggregatedMessagesForAgent
+selectMessagesForSelectedAgent → Use selectAggregatedMessagesForSelectedAgent
+```
+
+**Advanced: Raw selectors (for debugging only)**
+```typescript
+import { selectRawMessagesForAgent_UNSAFE } from '@headless-agent-manager/client';
+
+// ⚠️ Only for debugging/testing - shows duplicates!
+const rawMessages = useSelector((state) =>
+  selectRawMessagesForAgent_UNSAFE(state, agentId)
+);
+// Returns: ["H", "e", "l", "l", "o", "Hello"] - NOT for UI display!
+```
 
 #### Connection Selectors
 
@@ -389,7 +464,25 @@ All events are automatically handled by the WebSocket middleware. No manual even
 
 ## Best Practices
 
-### 1. Use Selectors for Derived Data
+### 1. Always Use Aggregated Message Selectors (CRITICAL!)
+
+```typescript
+import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+
+// ✅ GOOD: Aggregated selector (no duplicates)
+const messages = useSelector((state) =>
+  selectAggregatedMessagesForAgent(state, agentId)
+);
+
+// ❌ BAD: Direct state access (causes duplicates!)
+const messages = useSelector((state) =>
+  state.messages.byAgentId[agentId]?.messages
+);
+```
+
+**Why**: Claude CLI sends both streaming tokens AND complete messages. Without aggregation, users see duplicate messages in your UI!
+
+### 2. Use Memoized Selectors for Derived Data
 
 ```typescript
 // ✅ GOOD: Use memoized selectors
@@ -399,7 +492,7 @@ const runningAgents = useSelector(selectRunningAgents);
 const runningAgents = agents.filter(a => a.status === 'running');
 ```
 
-### 2. Dispatch Async Actions Properly
+### 3. Dispatch Async Actions Properly
 
 ```typescript
 // ✅ GOOD: Handle promise
@@ -416,7 +509,7 @@ const handleLaunch = async () => {
 dispatch(launchAgent({ ...request }));
 ```
 
-### 3. Subscribe to Agents Automatically
+### 4. Subscribe to Agents Automatically
 
 The module automatically subscribes to agents when messages are fetched. No manual subscription needed!
 
@@ -425,7 +518,7 @@ The module automatically subscribes to agents when messages are fetched. No manu
 dispatch(fetchMessages(agentId));
 ```
 
-### 4. Clean Up on Unmount
+### 5. Clean Up on Unmount
 
 ```typescript
 // ✅ GOOD: Properly typed dispatch
@@ -441,7 +534,125 @@ useEffect(() => {
 
 ---
 
+## Common Pitfalls
+
+### ❌ Pitfall #1: Accessing Raw State Directly
+
+**Problem**: Bypassing aggregated selectors causes duplicate messages in UI.
+
+```typescript
+// ❌ WRONG - Causes duplicates!
+const messages = useSelector(state =>
+  state.messages.byAgentId[agentId]?.messages
+);
+```
+
+**Solution**: Always use aggregated selectors:
+
+```typescript
+// ✅ CORRECT
+import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+
+const messages = useSelector(state =>
+  selectAggregatedMessagesForAgent(state, agentId)
+);
+```
+
+**Why it happens**: Claude CLI sends both streaming tokens (`"H"`, `"e"`, `"l"`, `"l"`, `"o"`) AND a complete message (`"Hello"`). Raw state includes both. Aggregated selectors combine tokens and remove the duplicate complete message.
+
+---
+
+### ❌ Pitfall #2: Creating Custom Selectors Without Aggregation
+
+**Problem**: Custom message selectors that don't call aggregation.
+
+```typescript
+// ❌ WRONG - Missing aggregation!
+export const selectMyCustomMessages = createSelector(
+  [(state) => state.messages.byAgentId[agentId]],
+  (agentMessages) => agentMessages?.messages || []  // No aggregation!
+);
+```
+
+**Solution**: Use `aggregateStreamingTokens` in custom selectors:
+
+```typescript
+// ✅ CORRECT
+import { aggregateStreamingTokens } from '@headless-agent-manager/client';
+
+export const selectMyCustomMessages = createSelector(
+  [(state) => state.messages.byAgentId[agentId]],
+  (agentMessages) => {
+    const rawMessages = agentMessages?.messages || [];
+    return aggregateStreamingTokens(rawMessages);  // Apply aggregation!
+  }
+);
+```
+
+---
+
+### ❌ Pitfall #3: Using Deprecated Selector Names
+
+**Problem**: Using old selector names that don't indicate aggregation.
+
+```typescript
+// ⚠️ DEPRECATED (but still works)
+const messages = useSelector(state =>
+  selectMessagesForAgent(state, agentId)
+);
+```
+
+**Solution**: Use new, clear names:
+
+```typescript
+// ✅ RECOMMENDED - Name shows aggregation
+const messages = useSelector(state =>
+  selectAggregatedMessagesForAgent(state, agentId)
+);
+```
+
+**Why**: The new names make it obvious that aggregation is happening. This helps prevent accidental raw state access.
+
+---
+
 ## Troubleshooting
+
+### 🔥 Duplicate messages appearing in UI
+
+**Symptom**: Messages appear multiple times, or you see individual characters followed by the complete message.
+
+**Example**: UI shows: `"H"` `"e"` `"l"` `"l"` `"o"` `"Hello"`
+
+**Cause**: You're accessing raw state instead of using aggregated selectors.
+
+**Solution**:
+
+1. **Check your selector**:
+   ```typescript
+   // ❌ If you're doing this - STOP!
+   const messages = useSelector(state =>
+     state.messages.byAgentId[agentId]?.messages
+   );
+
+   // ✅ Change to this
+   import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+
+   const messages = useSelector(state =>
+     selectAggregatedMessagesForAgent(state, agentId)
+   );
+   ```
+
+2. **Check custom selectors**:
+   - If you created custom message selectors, ensure they call `aggregateStreamingTokens()`
+   - See "Common Pitfalls" section above for examples
+
+3. **Verify in Redux DevTools**:
+   - Open Redux DevTools
+   - Check `state.messages.byAgentId[yourAgentId].messages`
+   - You should see streaming tokens with `metadata.eventType = 'content_delta'`
+   - This is normal! The selector aggregates them for you
+
+---
 
 ### WebSocket not connecting
 
@@ -456,6 +667,7 @@ useEffect(() => {
 2. Check WebSocket connection (`selectIsConnected`)
 3. Verify backend is emitting `agent:message` events
 4. Check Redux DevTools for state updates
+5. Verify you're using `selectAggregatedMessagesForAgent` (not raw state)
 
 ### Type errors
 
@@ -522,7 +734,32 @@ export function AgentDashboard() {
     </div>
   );
 }
+
+// components/AgentMessages.tsx
+import { useSelector } from 'react-redux';
+import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+
+export function AgentMessages({ agentId }: { agentId: string }) {
+  // ✅ IMPORTANT: Use aggregated selector to prevent duplicates!
+  const messages = useSelector((state) =>
+    selectAggregatedMessagesForAgent(state, agentId)
+  );
+
+  return (
+    <div>
+      <h2>Messages</h2>
+      {messages.map(msg => (
+        <div key={msg.id} className={`message message-${msg.type}`}>
+          <span className="type">{msg.type}</span>
+          <span className="content">{msg.content}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 ```
+
+**Note**: Always use `selectAggregatedMessagesForAgent` for displaying messages. Never access `state.messages.byAgentId[id].messages` directly!
 
 ---
 
@@ -547,6 +784,114 @@ import type {
 
 ---
 
+## Advanced: Compile-Time Safety with ESLint
+
+For stricter safety, you can use the included ESLint rule to catch raw message access at compile time.
+
+### Quick Setup (Recommended)
+
+The simplest approach is to copy the rule to your project:
+
+```bash
+# Copy ESLint rule to your project
+mkdir -p .eslint-rules
+cp node_modules/@headless-agent-manager/client/eslint-rules/no-raw-message-access.js .eslint-rules/
+```
+
+Then configure ESLint:
+
+```javascript
+// .eslintrc.js
+const noRawMessageAccess = require('./.eslint-rules/no-raw-message-access');
+
+module.exports = {
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    ecmaVersion: 2020,
+    sourceType: 'module',
+  },
+  plugins: ['local'],
+  rules: {
+    'local/no-raw-message-access': 'error',
+  },
+  settings: {
+    'local-rules': {
+      'no-raw-message-access': noRawMessageAccess,
+    },
+  },
+};
+```
+
+Install the local plugin helper:
+
+```bash
+npm install --save-dev eslint-plugin-local
+```
+
+### What the Rule Catches
+
+```typescript
+// ❌ ESLint ERROR: Direct access to raw message state
+const messages = useSelector(state =>
+  state.messages.byAgentId[agentId]?.messages
+);
+
+// Error message shown:
+// Direct access to raw message state detected. This causes duplicate messages in the UI!
+// Instead of: state.messages.byAgentId[agentId]?.messages
+// Use: selectAggregatedMessagesForAgent(state, agentId)
+```
+
+```typescript
+// ✅ No error - using recommended selector
+const messages = useSelector(state =>
+  selectAggregatedMessagesForAgent(state, agentId)
+);
+```
+
+### Testing the Rule
+
+The module includes tests for the ESLint rule:
+
+```bash
+npm run test:eslint-rule
+# Expected: ✅ All ESLint rule tests passed!
+```
+
+### Alternative: Type-Safe Hooks (Simpler)
+
+If ESLint setup is too complex, use type-safe hooks instead:
+
+```typescript
+// hooks/useMessages.ts
+import { useSelector } from 'react-redux';
+import { selectAggregatedMessagesForAgent } from '@headless-agent-manager/client';
+import type { RootState } from '@headless-agent-manager/client';
+
+export function useAgentMessages(agentId: string | null) {
+  return useSelector((state: RootState) => {
+    if (!agentId) return [];
+    return selectAggregatedMessagesForAgent(state, agentId);
+  });
+}
+
+// Usage - no way to access raw state!
+function MyComponent({ agentId }: { agentId: string }) {
+  const messages = useAgentMessages(agentId);
+  // ✅ Always aggregated, no escape hatch
+}
+```
+
+**This approach:**
+- ✅ No ESLint setup required
+- ✅ TypeScript enforces correct usage
+- ✅ Simpler, less configuration
+- ✅ Recommended for most projects
+
+For complete ESLint rule documentation, see: [`eslint-rules/README.md`](./eslint-rules/README.md)
+
+---
+
 ## Contributing
 
 Contributions welcome! Please follow TDD (Test-Driven Development):
@@ -558,10 +903,13 @@ Contributions welcome! Please follow TDD (Test-Driven Development):
 ### Running Tests
 
 ```bash
-npm test              # Run all tests
-npm test -- --watch   # Watch mode
-npm run test:coverage # Coverage report
+npm test                  # Run all unit tests (115 tests)
+npm test -- --watch       # Watch mode
+npm run test:coverage     # Coverage report
+npm run test:eslint-rule  # Run ESLint rule tests (15 tests)
 ```
+
+**Total test coverage:** 130 tests (115 unit + 15 ESLint rule)
 
 ---
 

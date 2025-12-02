@@ -171,9 +171,7 @@ describe('DatabaseService', () => {
 
       // Assert - Tables should exist
       const database = db.getDatabase();
-      const tables = database
-        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
-        .all();
+      const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
 
       const tableNames = tables.map((t: any) => t.name);
       expect(tableNames).toContain('agents');
@@ -242,9 +240,7 @@ describe('DatabaseService', () => {
 
       // Act
       const database = db.getDatabase();
-      const indexes = database
-        .prepare("SELECT name FROM sqlite_master WHERE type='index'")
-        .all();
+      const indexes = database.prepare("SELECT name FROM sqlite_master WHERE type='index'").all();
 
       // Assert - Check for expected indexes
       const indexNames = indexes.map((i: any) => i.name);
@@ -292,14 +288,11 @@ describe('DatabaseService', () => {
       // Act
       const result = db.transaction((database) => {
         // Insert test data
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'test-id',
-          'synthetic',
-          'running',
-          'test',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('test-id', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
 
         // Query it back
         const row = database.prepare('SELECT * FROM agents WHERE id = ?').get('test-id');
@@ -323,14 +316,11 @@ describe('DatabaseService', () => {
       expect(() => {
         db.transaction((database) => {
           // Insert test data
-          database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-            'test-id',
-            'synthetic',
-            'running',
-            'test',
-            '{}',
-            new Date().toISOString()
-          );
+          database
+            .prepare(
+              'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+            )
+            .run('test-id', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
 
           // Throw error - should trigger rollback
           throw new Error('Transaction failed');
@@ -352,14 +342,11 @@ describe('DatabaseService', () => {
 
       // Act
       db.transaction((database) => {
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'test-id',
-          'synthetic',
-          'running',
-          'test',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('test-id', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
       });
 
       // Assert - Data should exist (committed)
@@ -378,25 +365,19 @@ describe('DatabaseService', () => {
 
       // Act - Outer transaction
       db.transaction((database) => {
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'outer-id',
-          'synthetic',
-          'running',
-          'outer',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('outer-id', 'synthetic', 'running', 'outer', '{}', new Date().toISOString());
 
         // Inner "transaction" (note: better-sqlite3 doesn't support true nested transactions)
         // This tests that we can call transaction logic within a transaction
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'inner-id',
-          'synthetic',
-          'running',
-          'inner',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('inner-id', 'synthetic', 'running', 'inner', '{}', new Date().toISOString());
       });
 
       // Assert - Both should exist
@@ -416,30 +397,30 @@ describe('DatabaseService', () => {
 
       // Act - Run transactions sequentially (better-sqlite3 is synchronous)
       db.transaction((database) => {
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'transaction-1',
-          'synthetic',
-          'running',
-          'test1',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('transaction-1', 'synthetic', 'running', 'test1', '{}', new Date().toISOString());
       });
 
       db.transaction((database) => {
-        database.prepare('INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(
-          'transaction-2',
-          'synthetic',
-          'running',
-          'test2',
-          '{}',
-          new Date().toISOString()
-        );
+        database
+          .prepare(
+            'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+          )
+          .run('transaction-2', 'synthetic', 'running', 'test2', '{}', new Date().toISOString());
       });
 
       // Assert - Both should exist independently
-      const row1 = db.getDatabase().prepare('SELECT * FROM agents WHERE id = ?').get('transaction-1');
-      const row2 = db.getDatabase().prepare('SELECT * FROM agents WHERE id = ?').get('transaction-2');
+      const row1 = db
+        .getDatabase()
+        .prepare('SELECT * FROM agents WHERE id = ?')
+        .get('transaction-1');
+      const row2 = db
+        .getDatabase()
+        .prepare('SELECT * FROM agents WHERE id = ?')
+        .get('transaction-2');
       expect(row1).toBeDefined();
       expect(row2).toBeDefined();
 

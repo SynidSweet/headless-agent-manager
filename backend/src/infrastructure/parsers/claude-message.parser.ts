@@ -42,7 +42,11 @@ export class ClaudeMessageParser {
 
       // Skip these streaming events - they don't contain displayable content
       // Return null instead of throwing to avoid polluting error logs
-      if (['message_start', 'content_block_start', 'content_block_stop', 'message_stop'].includes(eventType)) {
+      if (
+        ['message_start', 'content_block_start', 'content_block_stop', 'message_stop'].includes(
+          eventType
+        )
+      ) {
         return null;
       }
 
@@ -203,7 +207,12 @@ export class ClaudeMessageParser {
     } else if (parsed.content !== undefined) {
       // Old format: {"type":"assistant","content":"..."}
       content = parsed.content as string | object;
-    } else if (parsed.stats || messageType === 'system' || messageType === 'response' || (messageType === 'system' && parsed.role === 'result')) {
+    } else if (
+      parsed.stats ||
+      messageType === 'system' ||
+      messageType === 'response' ||
+      (messageType === 'system' && parsed.role === 'result')
+    ) {
       // System/result/response messages may not have content
       // Also handle old format where type=system and role=result
       if (messageType === 'system' && parsed.role === 'result') {

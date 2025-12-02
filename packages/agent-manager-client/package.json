@@ -19,6 +19,7 @@
   },
   "files": [
     "dist",
+    "eslint-rules",
     "README.md"
   ],
   "scripts": {
@@ -27,6 +28,7 @@
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
+    "test:eslint-rule": "node eslint-rules/no-raw-message-access.test.js",
     "lint": "echo 'Lint not configured yet'",
     "typecheck": "tsc --noEmit"
   },
@@ -39,6 +41,7 @@
   "devDependencies": {
     "@reduxjs/toolkit": "^2.0.0",
     "@types/node": "^24.6.0",
+    "eslint": "^8.57.0",
     "tsup": "^8.0.0",
     "typescript": "^5.9.0",
     "vitest": "^1.6.0"

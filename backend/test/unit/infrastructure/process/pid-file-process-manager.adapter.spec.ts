@@ -27,11 +27,18 @@ describe('PidFileProcessManager', () => {
     startedAt: new Date('2025-11-27T20:00:00.000Z'),
     port: currentPort,
     nodeVersion: 'v18.17.0',
+    instanceId: `instance-${pid}-${Date.now()}`,
   });
 
   // Helper to create mock file content
   const createLockFileContent = (pid: number = currentPid) => {
-    return JSON.stringify(createMockLock(pid));
+    return JSON.stringify({
+      pid,
+      startedAt: new Date('2025-11-27T20:00:00.000Z').toISOString(),
+      port: currentPort,
+      nodeVersion: 'v18.17.0',
+      instanceId: `instance-${pid}-1234567890`,
+    });
   };
 
   beforeEach(async () => {
@@ -207,10 +214,10 @@ describe('PidFileProcessManager', () => {
       const lock = await manager.acquireLock();
 
       // Assert
-      expect(lock.pid).toBe(currentPid);
-      expect(lock.port).toBe(currentPort);
-      expect(lock.nodeVersion).toBe(process.version);
-      expect(lock.startedAt).toBeInstanceOf(Date);
+      expect(lock.getPid()).toBe(currentPid);
+      expect(lock.getPort()).toBe(currentPort);
+      expect(lock.getNodeVersion()).toBe(process.version);
+      expect(lock.getStartedAt()).toBeInstanceOf(Date);
       expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
         testPidPath,
         expect.stringMatching(new RegExp(`"pid":\\s*${currentPid}`))
@@ -227,8 +234,8 @@ describe('PidFileProcessManager', () => {
       const afterTime = new Date();
 
       // Assert
-      expect(lock.startedAt.getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
-      expect(lock.startedAt.getTime()).toBeLessThanOrEqual(afterTime.getTime());
+      expect(lock.getStartedAt().getTime()).toBeGreaterThanOrEqual(beforeTime.getTime());
+      expect(lock.getStartedAt().getTime()).toBeLessThanOrEqual(afterTime.getTime());
     });
 
     it('should write valid JSON to file', async () => {
@@ -239,10 +246,7 @@ describe('PidFileProcessManager', () => {
       await manager.acquireLock();
 
       // Assert
-      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(
-        testPidPath,
-        expect.any(String)
-      );
+      expect(mockFileSystem.writeFile).toHaveBeenCalledWith(testPidPath, expect.any(String));
 
       // Verify JSON is valid
       const writtenContent = (mockFileSystem.writeFile as jest.Mock).mock.calls[0][1];
@@ -410,7 +414,7 @@ describe('PidFileProcessManager', () => {
 
       // 2. Acquire lock
       const lock = await manager.acquireLock();
-      expect(lock.pid).toBe(currentPid);
+      expect(lock.getPid()).toBe(currentPid);
 
       // 3. Instance is now running
       mockFileSystem.exists.mockResolvedValue(true);
@@ -418,7 +422,7 @@ describe('PidFileProcessManager', () => {
 
       // 4. Get current lock
       const currentLock = await manager.getCurrentLock();
-      expect(currentLock?.pid).toBe(currentPid);
+      expect(currentLock?.getPid()).toBe(currentPid);
 
       // 5. Release lock
       await manager.releaseLock();
@@ -440,7 +444,7 @@ describe('PidFileProcessManager', () => {
       // 2. Now can acquire new lock
       mockFileSystem.writeFile.mockResolvedValue();
       const newLock = await manager.acquireLock();
-      expect(newLock.pid).toBe(currentPid);
+      expect(newLock.getPid()).toBe(currentPid);
     });
   });
 });

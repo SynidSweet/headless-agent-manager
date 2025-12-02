@@ -150,7 +150,8 @@ export class AgentController {
   ): Promise<AgentMessageDto[]> {
     const fs = require('fs');
     const logFile = '/tmp/controller-debug.log';
-    const log = (msg: string) => fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
+    const log = (msg: string) =>
+      fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
 
     log(`START: getAgentMessages(${id}, since=${since})`);
     try {
@@ -196,10 +197,7 @@ export class AgentController {
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async terminateAgent(
-    @Param('id') id: string,
-    @Query('force') force?: string,
-  ): Promise<void> {
+  async terminateAgent(@Param('id') id: string, @Query('force') force?: string): Promise<void> {
     try {
       const agentId = AgentId.fromString(id);
 

@@ -10,9 +10,7 @@ import { AgentMessageDto, CreateMessageDto } from '@application/dto';
  */
 @Injectable()
 export class AgentMessageService {
-  constructor(
-    @Inject(DatabaseService) private readonly databaseService: DatabaseService
-  ) {}
+  constructor(@Inject(DatabaseService) private readonly databaseService: DatabaseService) {}
 
   /**
    * Save a new message to the database
@@ -21,9 +19,6 @@ export class AgentMessageService {
    * @returns Saved message with ID and sequence number
    */
   async saveMessage(createDto: CreateMessageDto): Promise<AgentMessageDto> {
-    const fs = require('fs');
-    fs.appendFileSync('/tmp/save-message.log', `[${new Date().toISOString()}] saveMessage called for agent ${createDto.agentId}\n`);
-
     const db = this.databaseService.getDatabase();
 
     // Generate unique ID
@@ -33,9 +28,8 @@ export class AgentMessageService {
     const createdAt = new Date().toISOString();
 
     // Prepare content (serialize objects to JSON)
-    const contentString = typeof createDto.content === 'string'
-      ? createDto.content
-      : JSON.stringify(createDto.content);
+    const contentString =
+      typeof createDto.content === 'string' ? createDto.content : JSON.stringify(createDto.content);
 
     // Use atomic INSERT with subquery to prevent race conditions on sequence numbers
     // The subquery calculates the next sequence number within the same statement
@@ -57,18 +51,7 @@ export class AgentMessageService {
 
     // Execute insert - the subquery ensures atomicity
     // Will throw SqliteError if FK constraint fails
-    console.log('[DEBUG] Executing INSERT for message:', {
-      id,
-      agentId: createDto.agentId,
-      type: createDto.type,
-      contentLength: contentString.length,
-    });
-
-    // Check if we're in a transaction
-    const inTransaction = db.inTransaction;
-    console.log('[DEBUG] Before INSERT - inTransaction:', inTransaction);
-
-    const insertResult = insertStmt.run(
+    insertStmt.run(
       id,
       createDto.agentId,
       createDto.agentId, // For the subquery
@@ -80,14 +63,6 @@ export class AgentMessageService {
       createdAt
     );
 
-    console.log('[DEBUG] INSERT result:', {
-      changes: insertResult.changes,
-      lastInsertRowid: insertResult.lastInsertRowid,
-      inTransactionAfter: db.inTransaction
-    });
-
-    fs.appendFileSync('/tmp/save-message.log', `[${new Date().toISOString()}] INSERT complete, changes=${insertResult.changes}\n`);
-
     // With DELETE journal mode, data is synchronously written to disk on INSERT
     // No checkpoint needed - data persists immediately
 
@@ -96,8 +71,6 @@ export class AgentMessageService {
       SELECT sequence_number FROM agent_messages WHERE id = ?
     `);
     const result = selectStmt.get(id) as { sequence_number: number } | undefined;
-
-    console.log('[DEBUG] SELECT result:', result);
 
     if (!result) {
       throw new Error(`Message ${id} was inserted but cannot be retrieved!`);
@@ -123,13 +96,7 @@ export class AgentMessageService {
    * @returns Array of messages in chronological order
    */
   async findByAgentId(agentId: string): Promise<AgentMessageDto[]> {
-    const fs = require('fs');
-    const log = (msg: string) => fs.appendFileSync('/tmp/service-debug.log', `[${new Date().toISOString()}] ${msg}\n`);
-
-    log(`findByAgentId called for: ${agentId}`);
-
     const db = this.databaseService.getDatabase();
-    log(`Database instance obtained`);
 
     const stmt = db.prepare(`
       SELECT * FROM agent_messages
@@ -138,20 +105,8 @@ export class AgentMessageService {
     `);
 
     const rows = stmt.all(agentId);
-    log(`Query returned: ${rows.length} rows`);
 
-    if (rows.length > 0) {
-      log(`First row: ${JSON.stringify((rows[0] as any))}`);
-    }
-
-    // Also check total messages in table
-    const totalCount = db.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as { c: number };
-    log(`Total messages in DB: ${totalCount.c}`);
-
-    const result = rows.map((row: any) => this.mapRowToDto(row));
-    log(`Returning ${result.length} DTOs`);
-
-    return result;
+    return rows.map((row: any) => this.mapRowToDto(row));
   }
 
   /**

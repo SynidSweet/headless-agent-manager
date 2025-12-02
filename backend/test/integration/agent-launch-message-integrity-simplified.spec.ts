@@ -95,13 +95,17 @@ describe('Agent Launch → Message Persistence (Simplified Integration)', () => 
       const nonExistentAgentId = `fake-agent-${Date.now()}-${Math.random().toString(36)}`;
 
       // Act & Assert: Attempt to save message (should fail with FK error)
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: nonExistentAgentId,
           type: 'assistant',
           content: 'Test message',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
 
       // Verify no messages were saved
       const messages = await messageService.findByAgentId(nonExistentAgentId);
@@ -218,7 +222,7 @@ describe('Agent Launch → Message Persistence (Simplified Integration)', () => 
 
       // Assert: All messages saved successfully
       expect(savedMessages).toHaveLength(10);
-      expect(new Set(savedMessages.map(m => m.sequenceNumber)).size).toBe(10); // All unique sequences
+      expect(new Set(savedMessages.map((m) => m.sequenceNumber)).size).toBe(10); // All unique sequences
 
       const messages = await messageService.findByAgentId(agent.id.toString());
       expect(messages).toHaveLength(10);

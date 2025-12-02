@@ -68,13 +68,17 @@ describe('Negative Tests (System Must Reject Invalid Input)', () => {
       const fakeAgentId = `fake-agent-${Date.now()}-${Math.random().toString(36)}`;
 
       // Act & Assert
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: fakeAgentId,
           type: 'assistant',
           content: 'Should fail',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
     });
 
     it('NEGATIVE: should reject duplicate agent ID (UNIQUE constraint)', async () => {
@@ -220,14 +224,7 @@ describe('Negative Tests (System Must Reject Invalid Input)', () => {
         .prepare(
           'INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
         )
-        .run(
-          messageId,
-          agent.id.toString(),
-          1,
-          'assistant',
-          'First',
-          new Date().toISOString()
-        );
+        .run(messageId, agent.id.toString(), 1, 'assistant', 'First', new Date().toISOString());
 
       // Act & Assert - Try to insert with same UUID
       expect(() => {
@@ -313,13 +310,17 @@ describe('Negative Tests (System Must Reject Invalid Input)', () => {
       await repository.delete(agent.id);
 
       // Act & Assert - Try to save message for deleted agent
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: agent.id.toString(),
           type: 'assistant',
           content: 'Should fail',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
     });
 
     it('NEGATIVE: should accept any message type (documents current behavior)', async () => {
@@ -418,13 +419,17 @@ describe('Negative Tests (System Must Reject Invalid Input)', () => {
       await repository.save(agent);
 
       // Act & Assert - Undefined violates NOT NULL constraint
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: agent.id.toString(),
           type: 'assistant',
           content: undefined as any,
-        })
-      ).rejects.toThrow(/NOT NULL constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected NOT NULL constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/NOT NULL constraint failed/);
+      }
     });
 
     it('NEGATIVE: should reject agent creation with null prompt', () => {

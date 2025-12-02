@@ -68,13 +68,17 @@ describe('Database Schema Contract', () => {
       const invalidAgentId = `fake-agent-${Date.now()}-${Math.random().toString(36)}`;
 
       // Act & Assert - Should throw FK constraint error
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: invalidAgentId,
           type: 'assistant',
           content: 'Test message',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
     });
 
     it('CONTRACT: must CASCADE delete messages when agent deleted', async () => {
@@ -145,14 +149,7 @@ describe('Database Schema Contract', () => {
         .prepare(
           'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
         )
-        .run(
-          agentId,
-          'synthetic',
-          'running',
-          'Test 1',
-          '{}',
-          new Date().toISOString()
-        );
+        .run(agentId, 'synthetic', 'running', 'Test 1', '{}', new Date().toISOString());
 
       // Act - Try to insert again with same ID
       const duplicateInsert = () => {
@@ -273,7 +270,8 @@ describe('Database Schema Contract', () => {
   describe('Index Performance', () => {
     it('CONTRACT: must have index on agents(status) for findByStatus()', () => {
       // Act
-      const indexes = db.getDatabase()
+      const indexes = db
+        .getDatabase()
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agents'")
         .all() as any[];
 
@@ -284,7 +282,8 @@ describe('Database Schema Contract', () => {
 
     it('CONTRACT: must have index on agent_messages(agent_id) for message lookup', () => {
       // Act
-      const indexes = db.getDatabase()
+      const indexes = db
+        .getDatabase()
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_messages'")
         .all() as any[];
 
@@ -295,7 +294,8 @@ describe('Database Schema Contract', () => {
 
     it('CONTRACT: must have index on (agent_id, sequence_number) for ordering', () => {
       // Act
-      const indexes = db.getDatabase()
+      const indexes = db
+        .getDatabase()
         .prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='agent_messages'")
         .all() as any[];
 
@@ -314,13 +314,18 @@ describe('Database Schema Contract', () => {
       await repository.save(agent);
 
       // Act - Get query plan
-      const queryPlan = db.getDatabase()
+      const queryPlan = db
+        .getDatabase()
         .prepare('EXPLAIN QUERY PLAN SELECT * FROM agent_messages WHERE agent_id = ?')
         .all('test-id') as any[];
 
-      // Assert - Should use index
-      const usesIndex = queryPlan.some((row: any) =>
-        row.detail && row.detail.includes('idx_messages_agent_id')
+      // Assert - Should use either the single-column or composite index
+      // SQLite optimizer may choose idx_messages_sequence (composite) over idx_messages_agent_id
+      // because the composite index can also be used for agent_id-only queries
+      const usesIndex = queryPlan.some(
+        (row: any) => row.detail &&
+        (row.detail.includes('idx_messages_agent_id') ||
+         row.detail.includes('idx_messages_sequence'))
       );
       expect(usesIndex).toBe(true);
     });
@@ -337,7 +342,8 @@ describe('Database Schema Contract', () => {
       await repository.save(agent);
 
       // Act - Get raw database value
-      const row = db.getDatabase()
+      const row = db
+        .getDatabase()
         .prepare('SELECT created_at FROM agents WHERE id = ?')
         .get(agent.id.toString()) as any;
 
@@ -355,7 +361,8 @@ describe('Database Schema Contract', () => {
       await repository.save(agent);
 
       // Act - Get raw database value
-      const row = db.getDatabase()
+      const row = db
+        .getDatabase()
         .prepare('SELECT configuration FROM agents WHERE id = ?')
         .get(agent.id.toString()) as any;
 
@@ -376,7 +383,8 @@ describe('Database Schema Contract', () => {
       await repository.save(agent);
 
       // Act - Get raw database value
-      const row = db.getDatabase()
+      const row = db
+        .getDatabase()
         .prepare('SELECT id FROM agents WHERE id = ?')
         .get(agent.id.toString()) as any;
 

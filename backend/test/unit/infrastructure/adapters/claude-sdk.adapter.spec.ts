@@ -127,10 +127,7 @@ describe('ClaudeSDKAdapter', () => {
 
       await adapter.start(session);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'Claude SDK agent started',
-        expect.any(Object)
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith('Claude SDK agent started', expect.any(Object));
     });
   });
 

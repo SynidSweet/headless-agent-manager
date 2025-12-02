@@ -17,7 +17,8 @@ export default defineConfig({
     hmr: {
       clientPort: 443, // For HTTPS proxy
       protocol: 'wss',
-      host: 'agents.petter.ai',
+      // Use dev domain for dev port, prod domain for prod port
+      host: process.env.VITE_PORT === '5174' ? 'agents.dev.petter.ai' : 'agents.petter.ai',
     },
     proxy: {
       '/api': {

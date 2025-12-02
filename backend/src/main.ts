@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { ConsoleLogger } from './infrastructure/logging/console-logger.service';
 import { ApplicationLifecycleService } from '@application/services/application-lifecycle.service';
 import { InstanceAlreadyRunningError } from '@domain/exceptions/instance-already-running.exception';
+import { DomainExceptionFilter } from './presentation/filters/domain-exception.filter';
 
 /**
  * Bootstrap the NestJS application
@@ -21,10 +22,10 @@ async function bootstrap(): Promise<void> {
   // Enable CORS for frontend integration
   app.enableCors({
     origin: [
-      'http://localhost:5173',  // Production frontend
-      'http://localhost:5174',  // Development frontend
+      'http://localhost:5173', // Production frontend
+      'http://localhost:5174', // Development frontend
       'http://localhost:3000',
-      'https://agents.petter.ai',  // Remote access via Vercel tunnel
+      'https://agents.petter.ai', // Remote access via Vercel tunnel
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -32,11 +33,16 @@ async function bootstrap(): Promise<void> {
   });
 
   // Enable validation
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    })
+  );
+
+  // Register global exception filters
+  app.useGlobalFilters(new DomainExceptionFilter());
 
   // Add global API prefix
   app.setGlobalPrefix('api');

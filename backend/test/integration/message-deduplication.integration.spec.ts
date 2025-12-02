@@ -53,14 +53,7 @@ describe('Message Deduplication & Ordering', () => {
         .prepare(
           'INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
         )
-        .run(
-          messageId,
-          agent.id.toString(),
-          1,
-          'assistant',
-          'First',
-          new Date().toISOString()
-        );
+        .run(messageId, agent.id.toString(), 1, 'assistant', 'First', new Date().toISOString());
 
       // Act & Assert - Try to insert with same UUID
       expect(() => {
@@ -144,10 +137,7 @@ describe('Message Deduplication & Ordering', () => {
       );
 
       // Assert - All 20 UUIDs should be unique
-      const allIds = [
-        ...agent1Messages.map((m) => m.id),
-        ...agent2Messages.map((m) => m.id),
-      ];
+      const allIds = [...agent1Messages.map((m) => m.id), ...agent2Messages.map((m) => m.id)];
 
       const uniqueIds = new Set(allIds);
       expect(uniqueIds.size).toBe(20); // All unique
@@ -389,7 +379,10 @@ describe('Message Deduplication & Ordering', () => {
             'INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
           )
           .run(
-            `${seq}${seq}${seq}${seq}${seq}${seq}${seq}${seq}-1111-1111-1111-111111111111`.substring(0, 36),
+            `${seq}${seq}${seq}${seq}${seq}${seq}${seq}${seq}-1111-1111-1111-111111111111`.substring(
+              0,
+              36
+            ),
             agent.id.toString(),
             seq,
             'assistant',
@@ -501,9 +494,7 @@ describe('Message Deduplication & Ordering', () => {
 
       // Check monotonic ordering
       for (let i = 1; i < messages.length; i++) {
-        expect(messages[i]?.sequenceNumber).toBeGreaterThan(
-          messages[i - 1]?.sequenceNumber || 0
-        );
+        expect(messages[i]?.sequenceNumber).toBeGreaterThan(messages[i - 1]?.sequenceNumber || 0);
       }
     }, 10000);
 

@@ -59,7 +59,7 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
     PidFileProcessManager,
     {
       provide: 'IInstanceLockManager',
-      useClass: PidFileProcessManager
+      useClass: PidFileProcessManager,
     },
 
     // PID file path configuration
@@ -68,7 +68,7 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
       useFactory: (config: ConfigService) => {
         return config.get<string>('PID_FILE_PATH') || './data/backend.pid';
       },
-      inject: [ConfigService]
+      inject: [ConfigService],
     },
 
     // Claude SDK Adapter (requires API key)
@@ -150,11 +150,7 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
     // Repository (configurable via REPOSITORY_TYPE env var)
     {
       provide: 'IAgentRepository',
-      useFactory: (
-        config: ConfigService,
-        logger: ConsoleLogger,
-        dbService: DatabaseService
-      ) => {
+      useFactory: (config: ConfigService, logger: ConsoleLogger, dbService: DatabaseService) => {
         const repositoryType = config.get<string>('REPOSITORY_TYPE') || 'memory';
 
         logger.info('Configuring AgentRepository', { repositoryType });

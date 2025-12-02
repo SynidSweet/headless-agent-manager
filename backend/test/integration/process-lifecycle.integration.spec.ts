@@ -62,12 +62,7 @@ describe('Process Lifecycle Integration Tests', () => {
     database = new DatabaseService(':memory:');
     database.onModuleInit(); // Initialize schema
 
-    lockManager = new PidFileProcessManager(
-      testPidPath,
-      fileSystem,
-      processUtils,
-      logger
-    );
+    lockManager = new PidFileProcessManager(testPidPath, fileSystem, processUtils, logger);
 
     // Note: AgentOrchestrationService has complex dependencies
     // We'll mock it for integration tests focused on lifecycle
@@ -76,12 +71,7 @@ describe('Process Lifecycle Integration Tests', () => {
       terminateAgent: jest.fn().mockResolvedValue(undefined),
     } as any;
 
-    lifecycle = new ApplicationLifecycleService(
-      lockManager,
-      orchestration,
-      database,
-      logger
-    );
+    lifecycle = new ApplicationLifecycleService(lockManager, orchestration, database, logger);
   });
 
   afterEach(() => {
@@ -138,9 +128,7 @@ describe('Process Lifecycle Integration Tests', () => {
       );
 
       // Act & Assert: Second startup should fail
-      await expect(secondLifecycle.startup()).rejects.toThrow(
-        InstanceAlreadyRunningError
-      );
+      await expect(secondLifecycle.startup()).rejects.toThrow(InstanceAlreadyRunningError);
     });
 
     it('should throw InstanceAlreadyRunningError with lock details', async () => {
@@ -162,9 +150,7 @@ describe('Process Lifecycle Integration Tests', () => {
       } catch (error) {
         expect(error).toBeInstanceOf(InstanceAlreadyRunningError);
         expect((error as InstanceAlreadyRunningError).lock).toBeDefined();
-        expect((error as InstanceAlreadyRunningError).lock.getPid()).toBe(
-          process.pid
-        );
+        expect((error as InstanceAlreadyRunningError).lock.getPid()).toBe(process.pid);
       }
     });
 
@@ -220,9 +206,7 @@ describe('Process Lifecycle Integration Tests', () => {
       fs.writeFileSync(testPidPath, runningLock.toJSON());
 
       // Act & Assert: Should detect running instance
-      await expect(lifecycle.startup()).rejects.toThrow(
-        InstanceAlreadyRunningError
-      );
+      await expect(lifecycle.startup()).rejects.toThrow(InstanceAlreadyRunningError);
     });
   });
 
@@ -281,10 +265,7 @@ describe('Process Lifecycle Integration Tests', () => {
 
     it('should create parent directories if they do not exist', async () => {
       // Arrange: Use nested directory path
-      const nestedPath = path.join(
-        __dirname,
-        '../../data/nested/deep/test.pid'
-      );
+      const nestedPath = path.join(__dirname, '../../data/nested/deep/test.pid');
       const nestedDir = path.dirname(nestedPath);
 
       // Clean up if exists
@@ -357,9 +338,7 @@ describe('Process Lifecycle Integration Tests', () => {
       expect(readLock!.getPort()).toBe(3000);
       expect(readLock!.getNodeVersion()).toBe(process.version);
       expect(readLock!.getInstanceId()).toBe('manual-lock-id');
-      expect(readLock!.getStartedAt()).toEqual(
-        new Date('2025-11-27T10:00:00Z')
-      );
+      expect(readLock!.getStartedAt()).toEqual(new Date('2025-11-27T10:00:00Z'));
     });
   });
 
@@ -437,9 +416,7 @@ describe('Process Lifecycle Integration Tests', () => {
 
     it('should throw error if metadata requested before startup', () => {
       // Act & Assert
-      expect(() => lifecycle.getInstanceMetadata()).toThrow(
-        'Instance not started'
-      );
+      expect(() => lifecycle.getInstanceMetadata()).toThrow('Instance not started');
     });
   });
 

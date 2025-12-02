@@ -32,133 +32,125 @@ describe('ClaudeSDKAdapter Integration (Real API)', () => {
   const describeIfApiKey = process.env.ANTHROPIC_API_KEY ? describe : describe.skip;
 
   describeIfApiKey('real Claude API execution', () => {
-    it(
-      'should successfully stream messages from Claude API',
-      async () => {
-        // Arrange
-        const session = Session.create('What is 2 + 2? Answer with just the number.', {});
+    it('should successfully stream messages from Claude API', async () => {
+      // Arrange
+      const session = Session.create('What is 2 + 2? Answer with just the number.', {});
 
-        const messages: AgentMessage[] = [];
-        let completed = false;
+      const messages: AgentMessage[] = [];
+      let completed = false;
 
-        const observer: IAgentObserver = {
-          onMessage: (message: AgentMessage) => {
-            messages.push(message);
-            console.log('[TEST] Message:', message.type, message.metadata?.isDelta ? '(delta)' : '');
+      const observer: IAgentObserver = {
+        onMessage: (message: AgentMessage) => {
+          messages.push(message);
+          console.log('[TEST] Message:', message.type, message.metadata?.isDelta ? '(delta)' : '');
 
-            // Log content if it's a delta
-            if (message.metadata?.isDelta && typeof message.content === 'string') {
-              process.stdout.write(message.content);
-            }
-          },
-          onStatusChange: jest.fn(),
-          onError: (error) => {
-            console.error('[TEST] Error:', error.message);
-          },
-          onComplete: (result) => {
-            completed = true;
-            console.log('\n[TEST] Completed:', result.status, `(${result.duration}ms)`);
-            console.log('[TEST] Usage:', result.stats?.usage);
-          },
-        };
+          // Log content if it's a delta
+          if (message.metadata?.isDelta && typeof message.content === 'string') {
+            process.stdout.write(message.content);
+          }
+        },
+        onStatusChange: jest.fn(),
+        onError: (error) => {
+          console.error('[TEST] Error:', error.message);
+        },
+        onComplete: (result) => {
+          completed = true;
+          console.log('\n[TEST] Completed:', result.status, `(${result.duration}ms)`);
+          console.log('[TEST] Usage:', result.stats?.usage);
+        },
+      };
 
-        // Act
-        const agent = await adapter.start(session);
-        adapter.subscribe(agent.id, observer);
+      // Act
+      const agent = await adapter.start(session);
+      adapter.subscribe(agent.id, observer);
 
-        console.log('[TEST] Agent started, waiting for streaming...\n');
+      console.log('[TEST] Agent started, waiting for streaming...\n');
 
-        // Wait for completion (max 15 seconds)
-        await new Promise<void>((resolve) => {
-          const check = setInterval(() => {
-            if (completed) {
-              clearInterval(check);
-              resolve();
-            }
-          }, 100);
-
-          setTimeout(() => {
+      // Wait for completion (max 15 seconds)
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (completed) {
             clearInterval(check);
             resolve();
-          }, 15000);
-        });
+          }
+        }, 100);
 
-        // Assert
-        console.log('\n[TEST] Total messages received:', messages.length);
+        setTimeout(() => {
+          clearInterval(check);
+          resolve();
+        }, 15000);
+      });
 
-        // Should receive multiple messages
-        expect(messages.length).toBeGreaterThan(0);
+      // Assert
+      console.log('\n[TEST] Total messages received:', messages.length);
 
-        // Should have init message
-        const initMessage = messages.find((m) => m.role === 'init');
-        expect(initMessage).toBeDefined();
+      // Should receive multiple messages
+      expect(messages.length).toBeGreaterThan(0);
 
-        // Should have assistant delta messages
-        const deltaMessages = messages.filter((m) => m.metadata?.isDelta);
-        expect(deltaMessages.length).toBeGreaterThan(0);
+      // Should have init message
+      const initMessage = messages.find((m) => m.role === 'init');
+      expect(initMessage).toBeDefined();
 
-        // Should have result message
-        const resultMessage = messages.find((m) => m.role === 'result');
-        expect(resultMessage).toBeDefined();
-        expect(resultMessage?.metadata?.usage).toBeDefined();
+      // Should have assistant delta messages
+      const deltaMessages = messages.filter((m) => m.metadata?.isDelta);
+      expect(deltaMessages.length).toBeGreaterThan(0);
 
-        // Should complete
-        expect(completed).toBe(true);
-      },
-      20000
-    );
+      // Should have result message
+      const resultMessage = messages.find((m) => m.role === 'result');
+      expect(resultMessage).toBeDefined();
+      expect(resultMessage?.metadata?.usage).toBeDefined();
 
-    it(
-      'should handle streaming for longer responses',
-      async () => {
-        // Arrange
-        const session = Session.create('Count from 1 to 5, one number per line.', {});
+      // Should complete
+      expect(completed).toBe(true);
+    }, 20000);
 
-        const messages: AgentMessage[] = [];
-        let completed = false;
+    it('should handle streaming for longer responses', async () => {
+      // Arrange
+      const session = Session.create('Count from 1 to 5, one number per line.', {});
 
-        const observer: IAgentObserver = {
-          onMessage: (message: AgentMessage) => {
-            messages.push(message);
-          },
-          onStatusChange: jest.fn(),
-          onError: jest.fn(),
-          onComplete: () => {
-            completed = true;
-          },
-        };
+      const messages: AgentMessage[] = [];
+      let completed = false;
 
-        // Act
-        const agent = await adapter.start(session);
-        adapter.subscribe(agent.id, observer);
+      const observer: IAgentObserver = {
+        onMessage: (message: AgentMessage) => {
+          messages.push(message);
+        },
+        onStatusChange: jest.fn(),
+        onError: jest.fn(),
+        onComplete: () => {
+          completed = true;
+        },
+      };
 
-        // Wait for completion
-        await new Promise<void>((resolve) => {
-          const check = setInterval(() => {
-            if (completed) {
-              clearInterval(check);
-              resolve();
-            }
-          }, 100);
+      // Act
+      const agent = await adapter.start(session);
+      adapter.subscribe(agent.id, observer);
 
-          setTimeout(() => {
+      // Wait for completion
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (completed) {
             clearInterval(check);
             resolve();
-          }, 20000);
-        });
+          }
+        }, 100);
 
-        // Assert
-        console.log('[TEST] Messages received for longer response:', messages.length);
+        setTimeout(() => {
+          clearInterval(check);
+          resolve();
+        }, 20000);
+      });
 
-        // Should receive many delta messages for longer response
-        const deltaMessages = messages.filter((m) => m.metadata?.isDelta);
-        expect(deltaMessages.length).toBeGreaterThan(5); // Should have multiple chunks
+      // Assert
+      console.log('[TEST] Messages received for longer response:', messages.length);
 
-        // Should complete
-        expect(completed).toBe(true);
-      },
-      25000
-    );
+      // Should receive many delta messages for longer response
+      const deltaMessages = messages.filter((m) => m.metadata?.isDelta);
+      expect(deltaMessages.length).toBeGreaterThan(5); // Should have multiple chunks
+
+      // Should complete
+      expect(completed).toBe(true);
+    }, 25000);
   });
 
   describe('process lifecycle', () => {

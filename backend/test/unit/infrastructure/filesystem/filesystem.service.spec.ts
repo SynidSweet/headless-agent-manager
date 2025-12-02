@@ -115,9 +115,7 @@ describe('FileSystemService', () => {
 
     it('should throw error when file does not exist', async () => {
       // Act & Assert
-      await expect(
-        service.readFile(path.join(testDir, 'non-existent.txt'))
-      ).rejects.toThrow();
+      await expect(service.readFile(path.join(testDir, 'non-existent.txt'))).rejects.toThrow();
     });
 
     it('should handle UTF-8 content correctly', async () => {

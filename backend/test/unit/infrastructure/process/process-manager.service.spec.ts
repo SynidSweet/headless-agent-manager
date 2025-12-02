@@ -4,6 +4,8 @@ import { ILogger } from '@application/ports/logger.port';
 describe('ProcessManager Service', () => {
   let processManager: ProcessManager;
   let mockLogger: jest.Mocked<ILogger>;
+  // Track all spawned processes for comprehensive cleanup
+  const spawnedProcesses: any[] = [];
 
   beforeEach(() => {
     mockLogger = {
@@ -14,11 +16,43 @@ describe('ProcessManager Service', () => {
     };
 
     processManager = new ProcessManager(mockLogger);
+    spawnedProcesses.length = 0; // Clear array
+  });
+
+  afterEach(async () => {
+    // Comprehensive cleanup: destroy stdio pipes and kill processes
+    for (const proc of spawnedProcesses) {
+      try {
+        // Destroy stdio pipes first to close PIPEWRAP handles
+        if (proc.stdin && !proc.stdin.destroyed) {
+          proc.stdin.destroy();
+        }
+        if (proc.stdout && !proc.stdout.destroyed) {
+          proc.stdout.destroy();
+        }
+        if (proc.stderr && !proc.stderr.destroyed) {
+          proc.stderr.destroy();
+        }
+
+        // Kill process if still running
+        if (proc.pid && !proc.killed) {
+          try {
+            process.kill(proc.pid, 'SIGKILL');
+          } catch (e) {
+            // Process already dead, ignore
+          }
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    spawnedProcesses.length = 0;
   });
 
   describe('spawn', () => {
     it('should spawn a process with command and args', () => {
       const process = processManager.spawn('echo', ['hello']);
+      spawnedProcesses.push(process);
 
       expect(process).toBeDefined();
       expect(process.pid).toBeDefined();
@@ -26,6 +60,7 @@ describe('ProcessManager Service', () => {
 
     it('should spawn process with default stdio as pipe', () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
 
       expect(process.stdout).toBeDefined();
       expect(process.stderr).toBeDefined();
@@ -37,12 +72,14 @@ describe('ProcessManager Service', () => {
         cwd: '/tmp',
         env: { TEST: 'value' },
       });
+      spawnedProcesses.push(process);
 
       expect(process).toBeDefined();
     });
 
     it('should log when process is spawned', () => {
-      processManager.spawn('echo', ['test']);
+      const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
 
       expect(mockLogger.debug).toHaveBeenCalledWith('Process spawned', {
         command: 'echo',
@@ -53,7 +90,9 @@ describe('ProcessManager Service', () => {
 
     it('should track spawned processes', () => {
       const process1 = processManager.spawn('echo', ['test1']);
+      spawnedProcesses.push(process1);
       const process2 = processManager.spawn('echo', ['test2']);
+      spawnedProcesses.push(process2);
 
       expect(processManager.isRunning(process1.pid!)).toBe(true);
       expect(processManager.isRunning(process2.pid!)).toBe(true);
@@ -63,6 +102,7 @@ describe('ProcessManager Service', () => {
   describe('kill', () => {
     it('should kill a running process', async () => {
       const process = processManager.spawn('sleep', ['10']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       await processManager.kill(pid);
@@ -73,6 +113,7 @@ describe('ProcessManager Service', () => {
 
     it('should use SIGTERM by default', async () => {
       const process = processManager.spawn('sleep', ['10']);
+      spawnedProcesses.push(process);
       const killSpy = jest.spyOn(process, 'kill');
 
       await processManager.kill(process.pid!);
@@ -82,6 +123,7 @@ describe('ProcessManager Service', () => {
 
     it('should accept custom signal', async () => {
       const process = processManager.spawn('sleep', ['10']);
+      spawnedProcesses.push(process);
       const killSpy = jest.spyOn(process, 'kill');
 
       await processManager.kill(process.pid!, 'SIGKILL');
@@ -90,13 +132,12 @@ describe('ProcessManager Service', () => {
     });
 
     it('should throw error when process not found', async () => {
-      await expect(processManager.kill(99999)).rejects.toThrow(
-        'No process found with PID: 99999'
-      );
+      await expect(processManager.kill(99999)).rejects.toThrow('No process found with PID: 99999');
     });
 
     it('should handle process kill errors gracefully', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Wait for process to complete naturally first
@@ -108,6 +149,7 @@ describe('ProcessManager Service', () => {
 
     it('should log when process is killed', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       await processManager.kill(pid);
@@ -122,6 +164,7 @@ describe('ProcessManager Service', () => {
   describe('getStreamReader', () => {
     it('should return async iterable for stdout', async () => {
       const process = processManager.spawn('echo', ['line1\nline2\nline3']);
+      spawnedProcesses.push(process);
       const reader = processManager.getStreamReader(process);
 
       const lines: string[] = [];
@@ -132,38 +175,36 @@ describe('ProcessManager Service', () => {
       expect(lines.length).toBeGreaterThan(0);
     });
 
-    it(
-      'should yield lines as they are received',
-      async () => {
-        const process = processManager.spawn('echo', ['-e', 'hello\\nworld']);
-        const reader = processManager.getStreamReader(process);
+    it('should yield lines as they are received', async () => {
+      const process = processManager.spawn('echo', ['-e', 'hello\\nworld']);
+      spawnedProcesses.push(process);
+      const reader = processManager.getStreamReader(process);
 
-        const lines: string[] = [];
+      const lines: string[] = [];
 
-        // Collect lines with timeout
-        const timeout = setTimeout(() => {
-          // Force break after 2 seconds
-        }, 2000);
+      // Collect lines with timeout
+      const timeout = setTimeout(() => {
+        // Force break after 2 seconds
+      }, 2000);
 
-        try {
-          for await (const line of reader) {
-            lines.push(line);
-            if (lines.length >= 2) break;
-          }
-        } finally {
-          clearTimeout(timeout);
+      try {
+        for await (const line of reader) {
+          lines.push(line);
+          if (lines.length >= 2) break;
         }
+      } finally {
+        clearTimeout(timeout);
+      }
 
-        expect(lines.length).toBeGreaterThanOrEqual(1);
-        expect(lines.some((l) => l.includes('hello') || l.includes('world'))).toBe(true);
-      },
-      5000
-    );
+      expect(lines.length).toBeGreaterThanOrEqual(1);
+      expect(lines.some((l) => l.includes('hello') || l.includes('world'))).toBe(true);
+    }, 5000);
   });
 
   describe('isRunning', () => {
     it('should return true for running process', () => {
       const process = processManager.spawn('sleep', ['5']);
+      spawnedProcesses.push(process);
 
       expect(processManager.isRunning(process.pid!)).toBe(true);
     });
@@ -174,6 +215,7 @@ describe('ProcessManager Service', () => {
 
     it('should return false after process exits', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Wait for process to exit
@@ -186,6 +228,7 @@ describe('ProcessManager Service', () => {
   describe('cleanup', () => {
     it('should remove process from tracking when it exits', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       expect(processManager.isRunning(pid)).toBe(true);
@@ -199,6 +242,7 @@ describe('ProcessManager Service', () => {
 
     it('should log when process exits', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       await new Promise((resolve) => process.on('exit', resolve));

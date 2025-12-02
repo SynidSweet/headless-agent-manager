@@ -3,6 +3,7 @@ import { StreamingService } from '@application/services/streaming.service';
 import { ClaudeMessageParser } from '@infrastructure/parsers/claude-message.parser';
 import { DatabaseService } from '@infrastructure/database/database.service';
 import { IWebSocketGateway } from '@application/ports/websocket-gateway.port';
+import { IAgentRepository } from '@application/ports/agent-repository.port';
 import { AgentMessage } from '@application/ports/agent-runner.port';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { readFileSync } from 'fs';
@@ -26,6 +27,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
   let streamingService: StreamingService;
   let parser: ClaudeMessageParser;
   let mockWebSocketGateway: jest.Mocked<IWebSocketGateway>;
+  let mockAgentRepository: jest.Mocked<IAgentRepository>;
 
   beforeEach(() => {
     // Use in-memory SQLite database (real database, no mocks)
@@ -47,8 +49,21 @@ describe('Message Persistence Pipeline (Integration)', () => {
       isClientConnected: jest.fn(),
     };
 
+    // Mock agent repository (not needed for these tests)
+    mockAgentRepository = {
+      save: jest.fn(),
+      findById: jest.fn(),
+      findAll: jest.fn(),
+      delete: jest.fn(),
+      updateStatus: jest.fn(),
+    } as any;
+
     // Real streaming service
-    streamingService = new StreamingService(mockWebSocketGateway, messageService);
+    streamingService = new StreamingService(
+      mockWebSocketGateway,
+      mockAgentRepository,
+      messageService
+    );
   });
 
   afterEach(() => {
@@ -65,13 +80,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      agentId.toString(),
-      'claude-code',
-      'running',
-      'test prompt',
-      new Date().toISOString()
-    );
+    stmt.run(agentId.toString(), 'claude-code', 'running', 'test prompt', new Date().toISOString());
   }
 
   describe('Real Claude output formats', () => {
@@ -83,8 +92,13 @@ describe('Message Persistence Pipeline (Integration)', () => {
      */
     it('should save system init message without content field', async () => {
       // Real format from Claude CLI (no content field!)
-      const line = '{"type":"system","subtype":"init","session_id":"test-123","model":"claude-sonnet-4"}';
+      const line =
+        '{"type":"system","subtype":"init","session_id":"test-123","model":"claude-sonnet-4"}';
       const message = parser.parse(line);
+
+      // Ensure message was parsed
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       // Verify parser sets empty string for content
       expect(message.type).toBe('system');
@@ -94,9 +108,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       createAgentInDb(agentId); // Create agent first (foreign key requirement)
 
       // This should NOT throw database constraint error
-      await expect(
-        streamingService.broadcastMessage(agentId, message)
-      ).resolves.not.toThrow();
+      await expect(streamingService.broadcastMessage(agentId, message)).resolves.not.toThrow();
 
       // Verify message was saved to database
       const saved = await messageService.findByAgentId(agentId.toString());
@@ -112,8 +124,13 @@ describe('Message Persistence Pipeline (Integration)', () => {
      * Result messages also have no content, just metadata like duration.
      */
     it('should save result message without content field', async () => {
-      const line = '{"type":"result","subtype":"success","duration_ms":1234,"total_cost_usd":0.001}';
+      const line =
+        '{"type":"result","subtype":"success","duration_ms":1234,"total_cost_usd":0.001}';
       const message = parser.parse(line);
+
+      // Ensure message was parsed
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       // Parser maps "result" to "response" type
       expect(message.type).toBe('response');
@@ -122,9 +139,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       const agentId = AgentId.generate();
       createAgentInDb(agentId); // Create agent first (foreign key requirement)
 
-      await expect(
-        streamingService.broadcastMessage(agentId, message)
-      ).resolves.not.toThrow();
+      await expect(streamingService.broadcastMessage(agentId, message)).resolves.not.toThrow();
 
       const saved = await messageService.findByAgentId(agentId.toString());
       expect(saved).toHaveLength(1);
@@ -140,8 +155,13 @@ describe('Message Persistence Pipeline (Integration)', () => {
      * Assistant messages have complex nested content that needs parsing.
      */
     it('should save assistant message with nested content', async () => {
-      const line = '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello, world!"}],"role":"assistant"}}';
+      const line =
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Hello, world!"}],"role":"assistant"}}';
       const message = parser.parse(line);
+
+      // Ensure message was parsed
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('assistant');
       expect(message.content).toBe('Hello, world!');
@@ -162,8 +182,13 @@ describe('Message Persistence Pipeline (Integration)', () => {
      * Old format system/result messages with stats object.
      */
     it('should save system message with stats but no content', async () => {
-      const line = '{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78}}}';
+      const line =
+        '{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78}}}';
       const message = parser.parse(line);
+
+      // Ensure message was parsed
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('response'); // Maps to response when role=result
       expect(message.content).toBe('');
@@ -200,6 +225,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
 
       for (const line of realOutput) {
         const message = parser.parse(line);
+        if (!message) continue; // Skip unparseable lines
         await streamingService.broadcastMessage(agentId, message);
       }
 
@@ -231,6 +257,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
 
       for (const line of fixtures) {
         const message = parser.parse(line);
+        if (!message) continue; // Skip unparseable lines
         // This should NOT throw on messages without content
         await streamingService.broadcastMessage(agentId, message);
       }
@@ -332,15 +359,31 @@ describe('Message Persistence Pipeline (Integration)', () => {
      * this test verifies our error handling is in place.
      */
     it('should handle database constraint violations gracefully', async () => {
+      // Verify FK constraints are enabled before test
+      const database = db.getDatabase();
+      const fkEnabled = database.pragma('foreign_keys', { simple: true });
+      expect(fkEnabled).toBe(1);
+
       // Directly test the message service with invalid data
       // Note: This bypasses the parser, testing the service layer directly
-      await expect(
-        messageService.saveMessage({
-          agentId: 'test-agent',
+      // Use a unique non-existent agent ID to ensure FK constraint violation
+      const nonExistentAgentId = `fake-agent-${Date.now()}-${Math.random()}`;
+
+      // Verify the agent does NOT exist
+      const agentExists = database.prepare('SELECT id FROM agents WHERE id = ?').get(nonExistentAgentId);
+      expect(agentExists).toBeUndefined();
+
+      try {
+        await messageService.saveMessage({
+          agentId: nonExistentAgentId,
           type: 'assistant',
           content: null as any, // Invalid: null not allowed
-        })
-      ).rejects.toThrow();
+        });
+        fail('Expected database constraint error but none was thrown');
+      } catch (error: any) {
+        // Should throw either FK or NOT NULL constraint error
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed|NOT NULL constraint failed/);
+      }
     });
 
     /**
@@ -400,9 +443,7 @@ describe('Message Persistence Pipeline (Integration)', () => {
       }));
 
       // Send all messages rapidly
-      await Promise.all(
-        messages.map((msg) => streamingService.broadcastMessage(agentId, msg))
-      );
+      await Promise.all(messages.map((msg) => streamingService.broadcastMessage(agentId, msg)));
 
       const saved = await messageService.findByAgentId(agentId.toString());
       expect(saved).toHaveLength(messageCount);

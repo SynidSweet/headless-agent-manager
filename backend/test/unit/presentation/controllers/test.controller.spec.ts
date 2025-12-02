@@ -136,9 +136,7 @@ describe('TestController', () => {
       // Arrange
       const dto = {
         prompt: 'Another test',
-        schedule: [
-          { delay: 500, type: 'complete' as const, data: { success: true } },
-        ],
+        schedule: [{ delay: 500, type: 'complete' as const, data: { success: true } }],
       };
 
       // Act
@@ -165,9 +163,7 @@ describe('TestController', () => {
       // Arrange
       const dto = {
         prompt: 'Test',
-        schedule: [
-          { delay: 1000, type: 'complete' as const, data: { success: true } },
-        ],
+        schedule: [{ delay: 1000, type: 'complete' as const, data: { success: true } }],
       };
 
       // Act
@@ -200,9 +196,7 @@ describe('TestController', () => {
       await controller.launchSyntheticAgent(dto);
 
       // Assert
-      expect(mockPrepare).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO agents')
-      );
+      expect(mockPrepare).toHaveBeenCalledWith(expect.stringContaining('INSERT INTO agents'));
     });
 
     /**
@@ -219,12 +213,10 @@ describe('TestController', () => {
       // Arrange
       const dto = {
         prompt: 'Subscription test',
-        schedule: [
-          { delay: 1000, type: 'message' as const, data: { content: 'Test' } },
-        ],
+        schedule: [{ delay: 1000, type: 'message' as const, data: { content: 'Test' } }],
       };
 
-      const mockOrchestration = module.get(AgentOrchestrationService) as any;
+      const mockOrchestration = module.get(AgentOrchestrationService);
 
       // Act
       const result = await controller.launchSyntheticAgent(dto);

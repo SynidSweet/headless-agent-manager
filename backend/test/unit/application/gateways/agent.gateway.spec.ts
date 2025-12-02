@@ -20,11 +20,13 @@ import { StreamingService } from '@application/services/streaming.service';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import { Server, Socket } from 'socket.io';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
+import { ILogger } from '@application/ports/logger.port';
 
 describe('AgentGateway', () => {
   let gateway: AgentGateway;
   let mockStreamingService: jest.Mocked<StreamingService>;
   let mockOrchestrationService: jest.Mocked<AgentOrchestrationService>;
+  let mockLogger: jest.Mocked<ILogger>;
   let mockServer: jest.Mocked<Server>;
   let mockSocket: jest.Mocked<Socket>;
 
@@ -41,8 +43,16 @@ describe('AgentGateway', () => {
       getRunnerForAgent: jest.fn(),
     } as any;
 
+    // Mock Logger
+    mockLogger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as any;
+
     // Create gateway instance
-    gateway = new AgentGateway(mockStreamingService, mockOrchestrationService);
+    gateway = new AgentGateway(mockStreamingService, mockOrchestrationService, mockLogger);
 
     // Mock socket.io server
     mockServer = {
@@ -128,7 +138,7 @@ describe('AgentGateway', () => {
       // Assert
       const connectedClients = gateway.getConnectedClients();
       expect(connectedClients).toHaveLength(3);
-      expect(connectedClients.map(c => c.id)).toEqual([
+      expect(connectedClients.map((c) => c.id)).toEqual([
         'test-client-123',
         'test-client-456',
         'test-client-789',

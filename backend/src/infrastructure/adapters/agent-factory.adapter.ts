@@ -30,4 +30,3 @@ export class AgentFactoryAdapter implements IAgentFactory {
     }
   }
 }
-

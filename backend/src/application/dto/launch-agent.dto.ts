@@ -59,6 +59,20 @@ export interface AgentConfigurationDto {
    * Can be absolute or relative path
    */
   workingDirectory?: string;
+
+  /**
+   * Human-readable name for this conversation
+   * Displayed in the UI history panel
+   * @maxLength 100
+   */
+  conversationName?: string;
+
+  /**
+   * Claude model to use for the agent
+   * @example 'claude-sonnet-4-5-20250929', 'claude-opus-4-20250514'
+   * @default Uses Claude CLI default model
+   */
+  model?: string;
 }
 
 /**
@@ -105,9 +119,20 @@ export class LaunchAgentDto {
     // Validate agent type
     const validTypes = Object.values(AgentType) as string[];
     if (!validTypes.includes(this.type)) {
-      throw new Error(
-        `Invalid agent type: ${this.type}. Must be one of: ${validTypes.join(', ')}`
-      );
+      throw new Error(`Invalid agent type: ${this.type}. Must be one of: ${validTypes.join(', ')}`);
+    }
+
+    // Validate conversation name if provided
+    if (this.configuration?.conversationName !== undefined) {
+      const trimmed = this.configuration.conversationName.trim();
+
+      if (trimmed.length === 0) {
+        throw new Error('Conversation name cannot be empty');
+      }
+
+      if (trimmed.length > 100) {
+        throw new Error('Conversation name must be 100 characters or less');
+      }
     }
   }
 
@@ -160,6 +185,14 @@ export class LaunchAgentDto {
 
     if (this.configuration.workingDirectory) {
       config.workingDirectory = this.configuration.workingDirectory;
+    }
+
+    if (this.configuration.conversationName) {
+      config.conversationName = this.configuration.conversationName;
+    }
+
+    if (this.configuration.model) {
+      config.model = this.configuration.model;
     }
 
     return config;

@@ -38,7 +38,7 @@ export class InMemoryAgentLaunchQueue implements IAgentLaunchQueue {
   constructor(
     @Inject(forwardRef(() => AgentOrchestrationService))
     private readonly orchestrationService: AgentOrchestrationService,
-    @Inject('ILogger') private readonly logger: ILogger,
+    @Inject('ILogger') private readonly logger: ILogger
   ) {}
 
   /**
@@ -74,7 +74,7 @@ export class InMemoryAgentLaunchQueue implements IAgentLaunchQueue {
    * Has no effect if the request is already processing or completed.
    */
   cancelRequest(requestId: string): void {
-    const index = this.queue.findIndex(item => item.request.id === requestId);
+    const index = this.queue.findIndex((item) => item.request.id === requestId);
 
     if (index === -1) {
       this.logger.warn('Cannot cancel request - not in queue', { requestId });
@@ -115,9 +115,7 @@ export class InMemoryAgentLaunchQueue implements IAgentLaunchQueue {
       try {
         // Call orchestration service to perform the actual launch
         // This method will be added to AgentOrchestrationService in Phase 4
-        const agent = await this.orchestrationService.launchAgentDirect(
-          item.request
-        );
+        const agent = await this.orchestrationService.launchAgentDirect(item.request);
 
         this.logger.info('Launch request completed', {
           requestId: item.request.id,

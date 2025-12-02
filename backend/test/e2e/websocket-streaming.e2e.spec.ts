@@ -54,9 +54,7 @@ describe('WebSocket Streaming E2E', () => {
 
   beforeEach(async () => {
     // Reset database before each test
-    await request(app.getHttpServer())
-      .post('/api/test/reset-database')
-      .expect(204);
+    await request(app.getHttpServer()).post('/api/test/reset-database').expect(204);
   });
 
   afterEach(() => {
@@ -105,8 +103,13 @@ describe('WebSocket Streaming E2E', () => {
       // Subscribe to this specific agent
       clientSocket.emit('subscribe', { agentId });
 
+      // Wait for subscription confirmation to ensure we're ready before messages arrive
+      await new Promise<void>((resolve) => {
+        clientSocket.once('subscribed', () => resolve());
+      });
+
       // Wait for all messages to stream
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Should have received all 5 messages via WebSocket
       expect(messagesReceived.length).toBe(5);
@@ -120,7 +123,7 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should persist ALL streamed messages to database', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const messagesViaWebSocket: any[] = [];
 
@@ -148,7 +151,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for all messages
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Get messages from database directly
       const db = dbService.getDatabase();
@@ -173,10 +176,10 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should receive messages in correct order', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const messagesReceived: any[] = [];
-      clientSocket.on('agent:message', msg => messagesReceived.push(msg));
+      clientSocket.on('agent:message', (msg) => messagesReceived.push(msg));
 
       const messageCount = 20;
       const launchResponse = await request(app.getHttpServer())
@@ -197,7 +200,7 @@ describe('WebSocket Streaming E2E', () => {
       const agentId = launchResponse.body.agentId;
       clientSocket.emit('subscribe', { agentId });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Verify sequential order
       expect(messagesReceived.length).toBe(messageCount);
@@ -215,7 +218,7 @@ describe('WebSocket Streaming E2E', () => {
       // Messages must be in DB before WebSocket clients receive them
 
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       let firstMessageTimestamp = 0;
       let dbCheckPassed = false;
@@ -235,7 +238,9 @@ describe('WebSocket Streaming E2E', () => {
           expect((dbMsg as any).id).toBe(payload.message.id);
 
           dbCheckPassed = true;
-          console.log('✅ Database-first pattern verified: Message in DB before WebSocket emission');
+          console.log(
+            '✅ Database-first pattern verified: Message in DB before WebSocket emission'
+          );
         }
       });
 
@@ -257,7 +262,7 @@ describe('WebSocket Streaming E2E', () => {
       const agentId = launchResponse.body.agentId;
       clientSocket.emit('subscribe', { agentId });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       expect(firstMessageTimestamp).toBeGreaterThan(0);
       expect(dbCheckPassed).toBe(true);
@@ -265,7 +270,7 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should have all messages in database after streaming completes', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const messageCount = 15;
       const launchResponse = await request(app.getHttpServer())
@@ -287,7 +292,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for completion
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Query database
       const db = dbService.getDatabase();
@@ -311,7 +316,7 @@ describe('WebSocket Streaming E2E', () => {
   describe('Agent status changes preserve messages', () => {
     it('should preserve messages when agent completes', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const messageCount = 5;
       const launchResponse = await request(app.getHttpServer())
@@ -333,7 +338,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for streaming
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       // Get messages before completion
       const db = dbService.getDatabase();
@@ -345,7 +350,7 @@ describe('WebSocket Streaming E2E', () => {
       expect(messagesBefore.c).toBe(messageCount);
 
       // Wait for agent to complete (which triggers repository.save())
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise((resolve) => setTimeout(resolve, 300));
 
       // Messages should STILL exist (UPDATE not INSERT OR REPLACE)
       const messagesAfter = db
@@ -358,16 +363,16 @@ describe('WebSocket Streaming E2E', () => {
       expect(messagesAfter.c).toBe(messageCount);
 
       // Verify agent status is completed
-      const agent = db
-        .prepare('SELECT status FROM agents WHERE id = ?')
-        .get(agentId) as { status: string };
+      const agent = db.prepare('SELECT status FROM agents WHERE id = ?').get(agentId) as {
+        status: string;
+      };
 
       expect(agent.status).toBe('completed');
     }, 10000);
 
     it('should preserve messages when agent fails', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const launchResponse = await request(app.getHttpServer())
         .post('/api/test/agents/synthetic')
@@ -386,7 +391,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for error
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       // Messages should STILL exist after error
       const db = dbService.getDatabase();
@@ -397,9 +402,9 @@ describe('WebSocket Streaming E2E', () => {
       expect(messages.c).toBe(3);
 
       // Verify agent status is failed
-      const agent = db
-        .prepare('SELECT status FROM agents WHERE id = ?')
-        .get(agentId) as { status: string };
+      const agent = db.prepare('SELECT status FROM agents WHERE id = ?').get(agentId) as {
+        status: string;
+      };
 
       expect(agent.status).toBe('failed');
     }, 10000);
@@ -412,15 +417,15 @@ describe('WebSocket Streaming E2E', () => {
       const client2 = io(`http://localhost:${testPort}`);
 
       await Promise.all([
-        new Promise<void>(resolve => client1.on('connect', () => resolve())),
-        new Promise<void>(resolve => client2.on('connect', () => resolve())),
+        new Promise<void>((resolve) => client1.on('connect', () => resolve())),
+        new Promise<void>((resolve) => client2.on('connect', () => resolve())),
       ]);
 
       const client1Messages: any[] = [];
       const client2Messages: any[] = [];
 
-      client1.on('agent:message', msg => client1Messages.push(msg));
-      client2.on('agent:message', msg => client2Messages.push(msg));
+      client1.on('agent:message', (msg) => client1Messages.push(msg));
+      client2.on('agent:message', (msg) => client2Messages.push(msg));
 
       const launchResponse = await request(app.getHttpServer())
         .post('/api/test/agents/synthetic')
@@ -441,7 +446,7 @@ describe('WebSocket Streaming E2E', () => {
       client1.emit('subscribe', { agentId });
       client2.emit('subscribe', { agentId });
 
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise((resolve) => setTimeout(resolve, 600));
 
       // Both clients should receive same messages
       expect(client1Messages.length).toBe(3);
@@ -460,10 +465,10 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should allow client to unsubscribe and stop receiving messages', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       const messagesReceived: any[] = [];
-      clientSocket.on('agent:message', msg => messagesReceived.push(msg));
+      clientSocket.on('agent:message', (msg) => messagesReceived.push(msg));
 
       const launchResponse = await request(app.getHttpServer())
         .post('/api/test/agents/synthetic')
@@ -483,13 +488,13 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for first 2 messages
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 250));
 
       // Unsubscribe
       clientSocket.emit('unsubscribe', { agentId });
 
       // Wait for remaining messages
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 400));
 
       // Should only have received first 2 messages
       expect(messagesReceived.length).toBeLessThanOrEqual(2);
@@ -501,7 +506,7 @@ describe('WebSocket Streaming E2E', () => {
   describe('WebSocket connection lifecycle', () => {
     it('should receive agent:created event when agent launches', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       let agentCreatedEvent: any = null;
       clientSocket.on('agent:created', (event) => {
@@ -521,7 +526,7 @@ describe('WebSocket Streaming E2E', () => {
         .expect(201);
 
       // Wait for event
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       expect(agentCreatedEvent).not.toBeNull();
       expect(agentCreatedEvent.agent).toBeDefined();
@@ -530,7 +535,7 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should receive agent:complete event when agent finishes', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       let completeEvent: any = null;
       clientSocket.on('agent:complete', (event) => {
@@ -553,7 +558,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for completion
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 400));
 
       expect(completeEvent).not.toBeNull();
       expect(completeEvent.agentId).toBe(agentId);
@@ -562,7 +567,7 @@ describe('WebSocket Streaming E2E', () => {
 
     it('should receive agent:error event when agent fails', async () => {
       clientSocket = io(`http://localhost:${testPort}`);
-      await new Promise<void>(resolve => clientSocket.on('connect', () => resolve()));
+      await new Promise<void>((resolve) => clientSocket.on('connect', () => resolve()));
 
       let errorEvent: any = null;
       clientSocket.on('agent:error', (event) => {
@@ -585,7 +590,7 @@ describe('WebSocket Streaming E2E', () => {
       clientSocket.emit('subscribe', { agentId });
 
       // Wait for error
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise((resolve) => setTimeout(resolve, 400));
 
       expect(errorEvent).not.toBeNull();
       expect(errorEvent.agentId).toBe(agentId);

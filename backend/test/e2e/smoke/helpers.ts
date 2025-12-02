@@ -9,7 +9,9 @@ import request from 'supertest';
 /**
  * Check if Python proxy service is running and healthy
  */
-export async function checkPythonProxyHealth(proxyUrl: string = 'http://localhost:8000'): Promise<boolean> {
+export async function checkPythonProxyHealth(
+  proxyUrl: string = 'http://localhost:8000'
+): Promise<boolean> {
   try {
     const response = await fetch(`${proxyUrl}/health`, {
       signal: AbortSignal.timeout(5000),
@@ -36,12 +38,7 @@ export async function waitForAgentMessages(
   agentId: string,
   options: WaitForMessagesOptions = {}
 ): Promise<any[]> {
-  const {
-    timeout = 30000,
-    expectedContent,
-    minMessages = 1,
-    pollInterval = 500,
-  } = options;
+  const { timeout = 30000, expectedContent, minMessages = 1, pollInterval = 500 } = options;
 
   const startTime = Date.now();
   let messages: any[] = [];
@@ -121,9 +118,7 @@ export async function waitForAgentStatus(
  */
 export async function cleanupAllAgents(app: INestApplication): Promise<void> {
   try {
-    const response = await request(app.getHttpServer())
-      .get('/api/agents')
-      .expect(200);
+    const response = await request(app.getHttpServer()).get('/api/agents').expect(200);
 
     const agents = response.body;
 
@@ -149,7 +144,9 @@ export async function cleanupAllAgents(app: INestApplication): Promise<void> {
  * Verify Claude CLI is authenticated
  * Calls Python proxy health endpoint which checks authentication
  */
-export async function verifyClaudeAuthentication(proxyUrl: string = 'http://localhost:8000'): Promise<void> {
+export async function verifyClaudeAuthentication(
+  proxyUrl: string = 'http://localhost:8000'
+): Promise<void> {
   const response = await fetch(`${proxyUrl}/health`);
   if (!response.ok) {
     throw new Error('Python proxy health check failed - Claude might not be authenticated');
@@ -157,9 +154,7 @@ export async function verifyClaudeAuthentication(proxyUrl: string = 'http://loca
 
   const health = (await response.json()) as { claude_authenticated?: boolean };
   if (health.claude_authenticated === false) {
-    throw new Error(
-      'Claude CLI not authenticated. Run: claude auth login'
-    );
+    throw new Error('Claude CLI not authenticated. Run: claude auth login');
   }
 }
 
@@ -180,9 +175,7 @@ export function skipIfProxyNotAvailable() {
     const isHealthy = await checkPythonProxyHealth(proxyUrl);
 
     if (!isHealthy) {
-      console.warn(
-        `⚠️  Python proxy not available at ${proxyUrl}. Skipping smoke tests.`
-      );
+      console.warn(`⚠️  Python proxy not available at ${proxyUrl}. Skipping smoke tests.`);
       console.warn('   To run smoke tests, start the Python proxy service:');
       console.warn('   cd claude-proxy-service && uvicorn app.main:app --reload');
     }

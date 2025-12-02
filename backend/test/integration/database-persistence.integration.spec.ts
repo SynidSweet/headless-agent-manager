@@ -49,13 +49,7 @@ describe('Database Persistence Integration Tests', () => {
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      agentId,
-      'claude-code',
-      'running',
-      'test prompt',
-      new Date().toISOString()
-    );
+    stmt.run(agentId, 'claude-code', 'running', 'test prompt', new Date().toISOString());
   }
 
   /**
@@ -79,13 +73,17 @@ describe('Database Persistence Integration Tests', () => {
       const nonExistentAgentId = 'fake-agent-id-does-not-exist';
 
       // Attempt to save message for non-existent agent
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: nonExistentAgentId,
           type: 'assistant',
           content: 'test message',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed|SQLITE_CONSTRAINT/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed|SQLITE_CONSTRAINT/);
+      }
 
       // Verify: No messages were saved
       const messages = await messageService.findByAgentId(nonExistentAgentId);
@@ -188,7 +186,7 @@ describe('Database Persistence Integration Tests', () => {
       const savedMessages = await Promise.all(promises);
 
       // Extract sequence numbers
-      const sequences = savedMessages.map(m => m.sequenceNumber).sort((a, b) => a - b);
+      const sequences = savedMessages.map((m) => m.sequenceNumber).sort((a, b) => a - b);
 
       // Should be exactly [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
       expect(sequences).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
@@ -214,8 +212,8 @@ describe('Database Persistence Integration Tests', () => {
       const messages2 = await messageService.findByAgentId(agent2);
 
       // Each agent should have sequences [1, 2]
-      expect(messages1.map(m => m.sequenceNumber)).toEqual([1, 2]);
-      expect(messages2.map(m => m.sequenceNumber)).toEqual([1, 2]);
+      expect(messages1.map((m) => m.sequenceNumber)).toEqual([1, 2]);
+      expect(messages2.map((m) => m.sequenceNumber)).toEqual([1, 2]);
     });
 
     it('should handle high-concurrency message bursts', async () => {
@@ -239,7 +237,7 @@ describe('Database Persistence Integration Tests', () => {
       expect(messages).toHaveLength(50);
 
       // Sequences should be [1, 2, 3, ..., 50] with NO gaps or duplicates
-      const sequences = messages.map(m => m.sequenceNumber).sort((a, b) => a - b);
+      const sequences = messages.map((m) => m.sequenceNumber).sort((a, b) => a - b);
       const expectedSequences = Array.from({ length: 50 }, (_, i) => i + 1);
       expect(sequences).toEqual(expectedSequences);
     });
@@ -293,7 +291,7 @@ describe('Database Persistence Integration Tests', () => {
       );
 
       const messages = await Promise.all(promises);
-      const ids = messages.map(m => m.id);
+      const ids = messages.map((m) => m.id);
 
       // All IDs should be unique
       const uniqueIds = new Set(ids);
@@ -432,7 +430,7 @@ describe('Database Persistence Integration Tests', () => {
       const messages = await messageService.findByAgentId(agentId);
 
       // Should have messages 1, 2, 3, 5 (missing 4)
-      const sequences = messages.map(m => m.sequenceNumber);
+      const sequences = messages.map((m) => m.sequenceNumber);
       expect(sequences).toEqual([1, 2, 3, 5]);
 
       // Detect gap
@@ -454,7 +452,7 @@ describe('Database Persistence Integration Tests', () => {
       }
 
       const messages = await messageService.findByAgentId(agentId);
-      const sequences = messages.map(m => m.sequenceNumber);
+      const sequences = messages.map((m) => m.sequenceNumber);
 
       // Should be complete [1, 2, 3, ..., 10]
       const hasGap = detectGaps(sequences);
@@ -486,7 +484,7 @@ describe('Database Persistence Integration Tests', () => {
       const results = await Promise.all(writes);
 
       expect(results).toHaveLength(100);
-      expect(results.every(r => r.id && r.sequenceNumber > 0)).toBe(true);
+      expect(results.every((r) => r.id && r.sequenceNumber > 0)).toBe(true);
 
       // Verify all were saved
       const messages = await messageService.findByAgentId(agentId);
@@ -522,7 +520,7 @@ describe('Database Persistence Integration Tests', () => {
       expect(messages).toHaveLength(40);
 
       // Sequences should be [1..40] with no gaps or duplicates
-      const sequences = messages.map(m => m.sequenceNumber).sort((a, b) => a - b);
+      const sequences = messages.map((m) => m.sequenceNumber).sort((a, b) => a - b);
       const expectedSequences = Array.from({ length: 40 }, (_, i) => i + 1);
       expect(sequences).toEqual(expectedSequences);
     });

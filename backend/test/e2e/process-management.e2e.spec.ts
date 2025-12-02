@@ -108,9 +108,7 @@ describe('Process Management E2E', () => {
       await app.listen(testPort);
 
       // Verify server is listening
-      const response = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/api/health').expect(200);
 
       expect(response.body.status).toBe('ok');
       expect(response.body.pid).toBe(process.pid);
@@ -172,9 +170,7 @@ describe('Process Management E2E', () => {
       await lifecycle.startup();
       await app.listen(testPort);
 
-      const response = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/api/health').expect(200);
 
       // Verify response structure matches HealthCheckDto
       expect(response.body).toMatchObject({
@@ -221,9 +217,7 @@ describe('Process Management E2E', () => {
       await lifecycle.startup();
       await app.listen(testPort);
 
-      const response = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/api/health').expect(200);
 
       // Database should be connected (in-memory by default)
       expect(response.body.databaseStatus).toBe('connected');
@@ -233,9 +227,7 @@ describe('Process Management E2E', () => {
       await lifecycle.startup();
       await app.listen(testPort);
 
-      const response = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/api/health').expect(200);
 
       expect(response.body.pid).toBe(process.pid);
     });
@@ -244,9 +236,7 @@ describe('Process Management E2E', () => {
       await lifecycle.startup();
       await app.listen(testPort);
 
-      const response = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const response = await request(app.getHttpServer()).get('/api/health').expect(200);
 
       const { memoryUsage } = response.body;
       expect(memoryUsage.heapUsed).toBeGreaterThan(0);
@@ -279,18 +269,14 @@ describe('Process Management E2E', () => {
       await app.listen(testPort);
 
       // Verify server responds and database is connected
-      const beforeResponse = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const beforeResponse = await request(app.getHttpServer()).get('/api/health').expect(200);
       expect(beforeResponse.body.databaseStatus).toBe('connected');
 
       // Shutdown
       await lifecycle.shutdown();
 
       // Database should be disconnected after shutdown
-      const afterResponse = await request(app.getHttpServer())
-        .get('/api/health')
-        .expect(200);
+      const afterResponse = await request(app.getHttpServer()).get('/api/health').expect(200);
       expect(afterResponse.body.databaseStatus).toBe('disconnected');
 
       // Now close the app

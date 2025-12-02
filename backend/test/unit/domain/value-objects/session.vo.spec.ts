@@ -124,6 +124,36 @@ describe('Session Value Object', () => {
       expect(session.configuration.workingDirectory).toBe('./my-project');
     });
 
+    it('should support conversationName configuration', () => {
+      const config: AgentConfiguration = {
+        conversationName: 'My Important Task',
+      };
+
+      const session = Session.create('test', config);
+
+      expect(session.configuration.conversationName).toBe('My Important Task');
+    });
+
+    it('should support model configuration', () => {
+      const config: AgentConfiguration = {
+        model: 'claude-sonnet-4-5-20250929',
+      };
+
+      const session = Session.create('test', config);
+
+      expect(session.configuration.model).toBe('claude-sonnet-4-5-20250929');
+    });
+
+    it('should support alternative model configuration', () => {
+      const config: AgentConfiguration = {
+        model: 'claude-opus-4-20250514',
+      };
+
+      const session = Session.create('test', config);
+
+      expect(session.configuration.model).toBe('claude-opus-4-20250514');
+    });
+
     it('should support multiple configuration options together', () => {
       const config: AgentConfiguration = {
         sessionId: 'resume-123',
@@ -132,11 +162,96 @@ describe('Session Value Object', () => {
         timeout: 120000,
         allowedTools: ['read', 'write'],
         workingDirectory: '/tmp/test-project',
+        model: 'claude-sonnet-4-5-20250929',
       };
 
       const session = Session.create('test', config);
 
       expect(session.configuration).toEqual(config);
+    });
+  });
+
+  describe('conversation name validation', () => {
+    it('should create session with conversation name', () => {
+      const session = Session.create('test prompt', {
+        conversationName: 'My Important Task',
+      });
+
+      expect(session.configuration.conversationName).toBe('My Important Task');
+    });
+
+    it('should create session without conversation name', () => {
+      const session = Session.create('test prompt', {});
+
+      expect(session.configuration.conversationName).toBeUndefined();
+    });
+
+    it('should trim conversation name whitespace', () => {
+      const session = Session.create('test prompt', {
+        conversationName: '  Spaced Name  ',
+      });
+
+      expect(session.configuration.conversationName).toBe('Spaced Name');
+    });
+
+    it('should throw DomainException when conversation name is empty after trimming', () => {
+      expect(() =>
+        Session.create('test prompt', {
+          conversationName: '   ',
+        })
+      ).toThrow(DomainException);
+      expect(() =>
+        Session.create('test prompt', {
+          conversationName: '   ',
+        })
+      ).toThrow('Conversation name cannot be empty');
+    });
+
+    it('should throw DomainException when conversation name exceeds 100 characters', () => {
+      const longName = 'a'.repeat(101);
+
+      expect(() =>
+        Session.create('test prompt', {
+          conversationName: longName,
+        })
+      ).toThrow(DomainException);
+      expect(() =>
+        Session.create('test prompt', {
+          conversationName: longName,
+        })
+      ).toThrow('Conversation name must be 100 characters or less');
+    });
+
+    it('should accept conversation name at 100 character limit', () => {
+      const maxName = 'a'.repeat(100);
+
+      const session = Session.create('test prompt', {
+        conversationName: maxName,
+      });
+
+      expect(session.configuration.conversationName).toBe(maxName);
+      expect(session.configuration.conversationName?.length).toBe(100);
+    });
+
+    it('should accept conversation name at 99 characters', () => {
+      const name = 'a'.repeat(99);
+
+      const session = Session.create('test prompt', {
+        conversationName: name,
+      });
+
+      expect(session.configuration.conversationName).toBe(name);
+    });
+
+    it('should trim long conversation name before checking length', () => {
+      // 98 'a' + 2 spaces = 100, but after trim it's 98 which is valid
+      const name = ' ' + 'a'.repeat(98) + ' ';
+
+      const session = Session.create('test prompt', {
+        conversationName: name,
+      });
+
+      expect(session.configuration.conversationName).toBe('a'.repeat(98));
     });
   });
 

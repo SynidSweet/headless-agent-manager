@@ -46,107 +46,102 @@ describe.skip('ClaudeCodeAdapter Integration (Real CLI - BLOCKED BY UPSTREAM BUG
   });
 
   describe('real Claude CLI execution', () => {
-    it(
-      'should successfully spawn Claude Code and receive streaming messages',
-      async () => {
-        // Arrange
-        const session = Session.create('What is 2 + 2? Answer with just the number.', {
-          outputFormat: 'stream-json',
-        });
+    it('should successfully spawn Claude Code and receive streaming messages', async () => {
+      // Arrange
+      const session = Session.create('What is 2 + 2? Answer with just the number.', {
+        outputFormat: 'stream-json',
+      });
 
-        const messages: AgentMessage[] = [];
-        let completed = false;
+      const messages: AgentMessage[] = [];
+      let completed = false;
 
-        const observer: IAgentObserver = {
-          onMessage: (message: AgentMessage) => {
-            messages.push(message);
-            console.log('[TEST] Message:', message.type, message.metadata?.subtype || '');
-          },
-          onStatusChange: jest.fn(),
-          onError: (error) => {
-            console.log('[TEST] Error:', error.message);
-          },
-          onComplete: (result) => {
-            completed = true;
-            console.log('[TEST] Completed:', result.status);
-          },
-        };
+      const observer: IAgentObserver = {
+        onMessage: (message: AgentMessage) => {
+          messages.push(message);
+          console.log('[TEST] Message:', message.type, message.metadata?.subtype || '');
+        },
+        onStatusChange: jest.fn(),
+        onError: (error) => {
+          console.log('[TEST] Error:', error.message);
+        },
+        onComplete: (result) => {
+          completed = true;
+          console.log('[TEST] Completed:', result.status);
+        },
+      };
 
-        // Act
-        const agent = await adapter.start(session);
-        adapter.subscribe(agent.id, observer);
+      // Act
+      const agent = await adapter.start(session);
+      adapter.subscribe(agent.id, observer);
 
-        // Wait for completion or timeout (10 seconds)
-        await new Promise<void>((resolve) => {
-          const check = setInterval(() => {
-            if (completed || messages.length > 0) {
-              clearInterval(check);
-              resolve();
-            }
-          }, 100);
-
-          setTimeout(() => {
+      // Wait for completion or timeout (10 seconds)
+      await new Promise<void>((resolve) => {
+        const check = setInterval(() => {
+          if (completed || messages.length > 0) {
             clearInterval(check);
             resolve();
-          }, 10000);
-        });
+          }
+        }, 100);
 
-        // Assert
-        console.log('[TEST] Total messages:', messages.length);
-        console.log('[TEST] Message types:', messages.map((m) => m.type));
+        setTimeout(() => {
+          clearInterval(check);
+          resolve();
+        }, 10000);
+      });
 
-        // Should receive multiple messages (init, assistant, result)
-        expect(messages.length).toBeGreaterThanOrEqual(3);
+      // Assert
+      console.log('[TEST] Total messages:', messages.length);
+      console.log(
+        '[TEST] Message types:',
+        messages.map((m) => m.type)
+      );
 
-        // Should have system init message
-        const initMessage = messages.find((m) => m.metadata?.subtype === 'init');
-        expect(initMessage).toBeDefined();
+      // Should receive multiple messages (init, assistant, result)
+      expect(messages.length).toBeGreaterThanOrEqual(3);
 
-        // Should have assistant message
-        const assistantMessage = messages.find((m) => m.type === 'assistant');
-        expect(assistantMessage).toBeDefined();
+      // Should have system init message
+      const initMessage = messages.find((m) => m.metadata?.subtype === 'init');
+      expect(initMessage).toBeDefined();
 
-        // Should have result message
-        const resultMessage = messages.find((m) => m.metadata?.subtype === 'success');
-        expect(resultMessage).toBeDefined();
+      // Should have assistant message
+      const assistantMessage = messages.find((m) => m.type === 'assistant');
+      expect(assistantMessage).toBeDefined();
 
-        // Clean up
-        try {
-          await adapter.stop(agent.id);
-        } catch (error) {
-          // May already be stopped
-        }
-      },
-      15000
-    );
+      // Should have result message
+      const resultMessage = messages.find((m) => m.metadata?.subtype === 'success');
+      expect(resultMessage).toBeDefined();
+
+      // Clean up
+      try {
+        await adapter.stop(agent.id);
+      } catch (error) {
+        // May already be stopped
+      }
+    }, 15000);
   });
 
   describe('process lifecycle', () => {
-    it(
-      'should properly stop running Claude CLI process',
-      async () => {
-        // Arrange
-        const session = Session.create('Count from 1 to 5', {
-          outputFormat: 'stream-json',
-        });
+    it('should properly stop running Claude CLI process', async () => {
+      // Arrange
+      const session = Session.create('Count from 1 to 5', {
+        outputFormat: 'stream-json',
+      });
 
-        // Act
-        const agent = await adapter.start(session);
+      // Act
+      const agent = await adapter.start(session);
 
-        // Wait a bit for process to start streaming
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+      // Wait a bit for process to start streaming
+      await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        // Verify it's running
-        const statusBefore = await adapter.getStatus(agent.id);
-        expect(statusBefore).toBe(AgentStatus.RUNNING);
+      // Verify it's running
+      const statusBefore = await adapter.getStatus(agent.id);
+      expect(statusBefore).toBe(AgentStatus.RUNNING);
 
-        // Stop it
-        await adapter.stop(agent.id);
+      // Stop it
+      await adapter.stop(agent.id);
 
-        // Assert - should be stopped now
-        await expect(adapter.getStatus(agent.id)).rejects.toThrow('No running agent found');
-      },
-      10000
-    );
+      // Assert - should be stopped now
+      await expect(adapter.getStatus(agent.id)).rejects.toThrow('No running agent found');
+    }, 10000);
   });
 });

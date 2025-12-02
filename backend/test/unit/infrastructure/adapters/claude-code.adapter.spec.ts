@@ -83,9 +83,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       await adapter.start(session);
 
@@ -110,9 +108,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       await adapter.start(session);
 
@@ -130,9 +126,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       const agent = await adapter.start(session);
 
@@ -147,9 +141,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       await adapter.start(session);
 
@@ -169,9 +161,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
       mockProcessManager.kill.mockResolvedValue();
 
       const agent = await adapter.start(session);
@@ -179,10 +169,7 @@ describe('ClaudeCodeAdapter', () => {
       await adapter.stop(agent.id);
 
       expect(mockProcessManager.kill).toHaveBeenCalledWith(12345, 'SIGTERM');
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        'Claude Code agent stopped',
-        expect.any(Object)
-      );
+      expect(mockLogger.info).toHaveBeenCalledWith('Claude Code agent stopped', expect.any(Object));
     });
 
     it('should throw error when agent not found', async () => {
@@ -201,9 +188,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
       mockProcessManager.kill.mockResolvedValue();
 
       const agent = await adapter.start(session);
@@ -222,9 +207,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
       mockProcessManager.isRunning.mockReturnValue(true);
 
       const agent = await adapter.start(session);
@@ -250,9 +233,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       const agent = await adapter.start(session);
 
@@ -279,9 +260,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       const agent = await adapter.start(session);
 
@@ -389,9 +368,7 @@ describe('ClaudeCodeAdapter', () => {
       mockProcess.stdout = new EventEmitter();
 
       mockProcessManager.spawn.mockReturnValue(mockProcess);
-      mockProcessManager.getStreamReader.mockReturnValue(
-        (async function* () {})()
-      );
+      mockProcessManager.getStreamReader.mockReturnValue((async function* () {})());
 
       const agent = await adapter.start(session);
 

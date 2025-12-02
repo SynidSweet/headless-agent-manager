@@ -161,4 +161,170 @@ describe('AgentLaunchForm', () => {
       expect(workingDirInput.value).toBe('./my-project');
     });
   });
+
+  describe('Conversation name', () => {
+    it('should render conversation name input field', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      expect(screen.getByLabelText(/Conversation Name/i)).toBeInTheDocument();
+    });
+
+    it('should allow entering conversation name', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      fireEvent.change(nameInput, { target: { value: 'My Important Task' } });
+
+      expect(nameInput.value).toBe('My Important Task');
+    });
+
+    it('should show validation error for empty conversation name after trim', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      fireEvent.change(nameInput, { target: { value: '   ' } });
+      fireEvent.blur(nameInput);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Conversation name cannot be empty/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should show validation error for conversation name exceeding 100 characters', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const longName = 'a'.repeat(101);
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      fireEvent.change(nameInput, { target: { value: longName } });
+      fireEvent.blur(nameInput);
+
+      await waitFor(() => {
+        expect(screen.getByText(/must be 100 characters or less/i)).toBeInTheDocument();
+      });
+    });
+
+    it('should not show validation error for valid conversation name', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      fireEvent.change(nameInput, { target: { value: 'Valid Name' } });
+      fireEvent.blur(nameInput);
+
+      await waitFor(() => {
+        expect(screen.queryByText(/Conversation name cannot be empty/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/must be 100 characters or less/i)).not.toBeInTheDocument();
+      });
+    });
+
+    it('should include conversation name in launch request', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      // Fill in form
+      const promptInput = screen.getByLabelText(/Prompt/i);
+      fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i);
+      fireEvent.change(nameInput, { target: { value: 'My Task Name' } });
+
+      // Verify the value is in the input
+      expect(nameInput).toHaveValue('My Task Name');
+
+      // Submit
+      const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
+      fireEvent.click(submitButton);
+
+      // Wait for form to clear (indicates successful submission)
+      await waitFor(() => {
+        expect(nameInput).toHaveValue('');
+        expect(promptInput).toHaveValue('');
+      });
+    });
+
+    it('should not include conversation name if not provided', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      // Fill in only prompt
+      const promptInput = screen.getByLabelText(/Prompt/i);
+      fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      expect(nameInput.value).toBe(''); // Conversation name is empty
+
+      // Submit without conversation name
+      const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
+      fireEvent.click(submitButton);
+
+      // Wait for form to clear (indicates successful submission)
+      await waitFor(() => {
+        expect(promptInput).toHaveValue('');
+      });
+    });
+
+    it('should clear conversation name after successful launch', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const promptInput = screen.getByLabelText(/Prompt/i);
+      fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
+
+      const nameInput = screen.getByLabelText(/Conversation Name/i) as HTMLInputElement;
+      fireEvent.change(nameInput, { target: { value: 'My Task' } });
+
+      const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(nameInput.value).toBe('');
+      });
+    });
+  });
+
+  describe('Model selection', () => {
+    it('should render model dropdown', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      expect(screen.getByLabelText(/Model/i)).toBeInTheDocument();
+    });
+
+    it('should have "Default" selected by default', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const select = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+      expect(select.value).toBe('default');
+    });
+
+    it('should have all model options', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      expect(screen.getByText('Default (Sonnet 4.5)')).toBeInTheDocument();
+      expect(screen.getByText('Sonnet 4.5 (Best for coding)')).toBeInTheDocument();
+      expect(screen.getByText('Opus 4.5 (Most intelligent)')).toBeInTheDocument();
+      expect(screen.getByText('Haiku 4.5 (Fastest)')).toBeInTheDocument();
+    });
+
+    it('should allow changing model', () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const select = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+      fireEvent.change(select, { target: { value: 'claude-opus-4-5-20251101' } });
+
+      expect(select.value).toBe('claude-opus-4-5-20251101');
+    });
+
+    it('should clear model selection after successful launch', async () => {
+      renderWithProvider(<AgentLaunchForm />);
+
+      const promptInput = screen.getByLabelText(/Prompt/i);
+      fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
+
+      const modelSelect = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+      fireEvent.change(modelSelect, { target: { value: 'claude-opus-4-5-20251101' } });
+
+      const submitButton = screen.getByRole('button', { name: /Launch Agent/i });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(modelSelect.value).toBe('default');
+      });
+    });
+  });
 });

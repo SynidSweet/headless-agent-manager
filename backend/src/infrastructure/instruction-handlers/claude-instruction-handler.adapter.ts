@@ -1,10 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { join } from 'path';
 import { homedir } from 'os';
-import {
-  IInstructionHandler,
-  ClaudeFileBackup,
-} from '@application/ports/instruction-handler.port';
+import { IInstructionHandler, ClaudeFileBackup } from '@application/ports/instruction-handler.port';
 import { IFileSystem } from '@application/ports/filesystem.port';
 import { ILogger } from '@application/ports/logger.port';
 
@@ -27,7 +24,7 @@ export class ClaudeInstructionHandler implements IInstructionHandler {
 
   constructor(
     @Inject('IFileSystem') private readonly fileSystem: IFileSystem,
-    @Inject('ILogger') private readonly logger: ILogger,
+    @Inject('ILogger') private readonly logger: ILogger
   ) {
     this.userClaudePath = join(homedir(), '.claude', 'CLAUDE.md');
     this.projectClaudePath = join(process.cwd(), 'CLAUDE.md');
@@ -37,9 +34,7 @@ export class ClaudeInstructionHandler implements IInstructionHandler {
    * Prepares the environment for custom instructions.
    * Backs up existing CLAUDE.md files and replaces them.
    */
-  async prepareEnvironment(
-    instructions: string | undefined,
-  ): Promise<ClaudeFileBackup | null> {
+  async prepareEnvironment(instructions: string | undefined): Promise<ClaudeFileBackup | null> {
     // Skip if no instructions provided
     if (!instructions || instructions.trim().length === 0) {
       this.logger.debug('No instructions provided, skipping environment preparation');
@@ -61,9 +56,7 @@ export class ClaudeInstructionHandler implements IInstructionHandler {
 
       // Backup user CLAUDE.md (if exists)
       if (await this.fileSystem.exists(this.userClaudePath)) {
-        backup.userClaudeContent = await this.fileSystem.readFile(
-          this.userClaudePath,
-        );
+        backup.userClaudeContent = await this.fileSystem.readFile(this.userClaudePath);
         this.logger.debug('Backed up user CLAUDE.md', {
           length: backup.userClaudeContent.length,
         });
@@ -79,9 +72,7 @@ export class ClaudeInstructionHandler implements IInstructionHandler {
 
       // Backup project CLAUDE.md (if exists)
       if (await this.fileSystem.exists(this.projectClaudePath)) {
-        backup.projectClaudeContent = await this.fileSystem.readFile(
-          this.projectClaudePath,
-        );
+        backup.projectClaudeContent = await this.fileSystem.readFile(this.projectClaudePath);
         this.logger.debug('Backed up project CLAUDE.md', {
           length: backup.projectClaudeContent.length,
         });
@@ -124,19 +115,13 @@ export class ClaudeInstructionHandler implements IInstructionHandler {
     try {
       // Restore user CLAUDE.md
       if (backup.userClaudeContent !== undefined) {
-        await this.fileSystem.writeFile(
-          backup.userClaudePath,
-          backup.userClaudeContent,
-        );
+        await this.fileSystem.writeFile(backup.userClaudePath, backup.userClaudeContent);
         this.logger.debug('Restored user CLAUDE.md');
       }
 
       // Restore project CLAUDE.md
       if (backup.projectClaudeContent !== undefined) {
-        await this.fileSystem.writeFile(
-          backup.projectClaudePath,
-          backup.projectClaudeContent,
-        );
+        await this.fileSystem.writeFile(backup.projectClaudePath, backup.projectClaudeContent);
         this.logger.debug('Restored project CLAUDE.md');
       }
 

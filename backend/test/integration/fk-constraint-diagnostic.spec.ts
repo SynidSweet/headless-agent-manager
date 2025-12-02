@@ -16,11 +16,17 @@ describe('FK Constraint Diagnostic', () => {
     db.onModuleInit();
     messageService = new AgentMessageService(db);
 
-    console.log('\n[DIAGNOSTIC] Test starting, FK pragma:', db.getDatabase().pragma('foreign_keys', { simple: true }));
+    console.log(
+      '\n[DIAGNOSTIC] Test starting, FK pragma:',
+      db.getDatabase().pragma('foreign_keys', { simple: true })
+    );
   });
 
   afterEach(() => {
-    console.log('[DIAGNOSTIC] Test ending, FK pragma:', db.getDatabase().pragma('foreign_keys', { simple: true }));
+    console.log(
+      '[DIAGNOSTIC] Test ending, FK pragma:',
+      db.getDatabase().pragma('foreign_keys', { simple: true })
+    );
     db.close();
   });
 
@@ -50,7 +56,10 @@ describe('FK Constraint Diagnostic', () => {
 
   it('DIAGNOSTIC: Can create table and check FK list', () => {
     const foreignKeys = db.getDatabase().pragma('foreign_key_list(agent_messages)');
-    console.log('[DIAGNOSTIC] Foreign keys for agent_messages table:', JSON.stringify(foreignKeys, null, 2));
+    console.log(
+      '[DIAGNOSTIC] Foreign keys for agent_messages table:',
+      JSON.stringify(foreignKeys, null, 2)
+    );
     expect(foreignKeys).toHaveLength(1);
   });
 });

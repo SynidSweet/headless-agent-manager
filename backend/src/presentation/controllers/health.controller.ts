@@ -12,7 +12,7 @@ import { HealthCheckDto } from '@application/dto/health-check.dto';
 export class HealthController {
   constructor(
     private readonly lifecycle: ApplicationLifecycleService,
-    private readonly orchestration: AgentOrchestrationService,
+    private readonly orchestration: AgentOrchestrationService
   ) {}
 
   /**

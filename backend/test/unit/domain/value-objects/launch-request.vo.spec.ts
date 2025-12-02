@@ -11,7 +11,9 @@ describe('LaunchRequest Value Object', () => {
       });
 
       expect(request.id).toBeDefined();
-      expect(request.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+      expect(request.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
       expect(request.agentType).toBe(AgentType.CLAUDE_CODE);
       expect(request.prompt).toBe('Test prompt');
       expect(request.instructions).toBeUndefined();

@@ -54,7 +54,7 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
           res.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
+            Connection: 'keep-alive',
             'X-Agent-Id': 'python-agent-123',
           });
 
@@ -83,18 +83,27 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       // Verify messages received
       expect(observer.onMessage).toHaveBeenCalledTimes(3);
-      expect(observer.onMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
-        type: 'system',
-        content: '',
-      }));
-      expect(observer.onMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
-        type: 'assistant',
-        content: 'Hello from Claude',
-      }));
-      expect(observer.onMessage).toHaveBeenNthCalledWith(3, expect.objectContaining({
-        type: 'assistant',
-        content: 'Second message',
-      }));
+      expect(observer.onMessage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          type: 'system',
+          content: '',
+        })
+      );
+      expect(observer.onMessage).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          type: 'assistant',
+          content: 'Hello from Claude',
+        })
+      );
+      expect(observer.onMessage).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({
+          type: 'assistant',
+          content: 'Second message',
+        })
+      );
 
       // Verify completion
       expect(observer.onComplete).toHaveBeenCalledWith(
@@ -505,9 +514,7 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
     it('should throw error for unknown agent', async () => {
       const fakeAgentId = { toString: () => 'unknown-agent-id' } as any;
 
-      await expect(adapter.getStatus(fakeAgentId)).rejects.toThrow(
-        'No running agent found'
-      );
+      await expect(adapter.getStatus(fakeAgentId)).rejects.toThrow('No running agent found');
     });
   });
 
@@ -544,9 +551,7 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
     it('should throw error when stopping unknown agent', async () => {
       const fakeAgentId = { toString: () => 'unknown-agent-id' } as any;
 
-      await expect(adapter.stop(fakeAgentId)).rejects.toThrow(
-        'No running agent found'
-      );
+      await expect(adapter.stop(fakeAgentId)).rejects.toThrow('No running agent found');
     });
   });
 
@@ -573,9 +578,7 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Agent should be cleaned up, so getStatus should throw
-      await expect(adapter.getStatus(agent.id)).rejects.toThrow(
-        'No running agent found'
-      );
+      await expect(adapter.getStatus(agent.id)).rejects.toThrow('No running agent found');
     });
 
     /**
@@ -600,9 +603,7 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Agent should be cleaned up after error
-      await expect(adapter.getStatus(agent.id)).rejects.toThrow(
-        'No running agent found'
-      );
+      await expect(adapter.getStatus(agent.id)).rejects.toThrow('No running agent found');
     });
   });
 

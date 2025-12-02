@@ -122,14 +122,24 @@ describe('SqliteAgentRepository', () => {
         // Create messages for this agent
         const db = databaseService.getDatabase();
         for (let i = 1; i <= 5; i++) {
-          db.prepare(`
+          db.prepare(
+            `
             INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Message ${i}`, new Date().toISOString());
+          `
+          ).run(
+            `msg-${i}`,
+            agent.id.toString(),
+            i,
+            'assistant',
+            `Message ${i}`,
+            new Date().toISOString()
+          );
         }
 
         // Verify messages exist
-        const messagesBefore = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+        const messagesBefore = db
+          .prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
           .get(agent.id.toString()) as { count: number };
         expect(messagesBefore.count).toBe(5);
 
@@ -138,12 +148,14 @@ describe('SqliteAgentRepository', () => {
         await repository.save(agent);
 
         // Assert: Messages should still exist
-        const messagesAfter = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+        const messagesAfter = db
+          .prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
           .get(agent.id.toString()) as { count: number };
         expect(messagesAfter.count).toBe(5);
 
         // Verify message content preserved
-        const messages = db.prepare('SELECT * FROM agent_messages WHERE agent_id = ? ORDER BY sequence_number')
+        const messages = db
+          .prepare('SELECT * FROM agent_messages WHERE agent_id = ? ORDER BY sequence_number')
           .all(agent.id.toString()) as Array<{ content: string; sequence_number: number }>;
         expect(messages).toHaveLength(5);
         expect(messages[0]?.content).toBe('Message 1');
@@ -162,10 +174,19 @@ describe('SqliteAgentRepository', () => {
         // Create 10 messages
         const db = databaseService.getDatabase();
         for (let i = 1; i <= 10; i++) {
-          db.prepare(`
+          db.prepare(
+            `
             INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Token ${i}`, new Date().toISOString());
+          `
+          ).run(
+            `msg-${i}`,
+            agent.id.toString(),
+            i,
+            'assistant',
+            `Token ${i}`,
+            new Date().toISOString()
+          );
         }
 
         // Act: Multiple status transitions
@@ -176,7 +197,8 @@ describe('SqliteAgentRepository', () => {
         await repository.save(agent);
 
         // Assert: All 10 messages should still exist
-        const messages = db.prepare('SELECT * FROM agent_messages WHERE agent_id = ?')
+        const messages = db
+          .prepare('SELECT * FROM agent_messages WHERE agent_id = ?')
           .all(agent.id.toString());
         expect(messages).toHaveLength(10);
       });
@@ -193,10 +215,19 @@ describe('SqliteAgentRepository', () => {
         // Create messages
         const db = databaseService.getDatabase();
         for (let i = 1; i <= 3; i++) {
-          db.prepare(`
+          db.prepare(
+            `
             INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
             VALUES (?, ?, ?, ?, ?, ?)
-          `).run(`msg-${i}`, agent.id.toString(), i, 'assistant', `Message ${i}`, new Date().toISOString());
+          `
+          ).run(
+            `msg-${i}`,
+            agent.id.toString(),
+            i,
+            'assistant',
+            `Message ${i}`,
+            new Date().toISOString()
+          );
         }
 
         // Act: Rapid status updates (simulating real-world scenario)
@@ -206,7 +237,8 @@ describe('SqliteAgentRepository', () => {
         await repository.save(agent); // Redundant save
 
         // Assert: Messages should survive redundant saves
-        const messagesAfter = db.prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
+        const messagesAfter = db
+          .prepare('SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?')
           .get(agent.id.toString()) as { count: number };
         expect(messagesAfter.count).toBe(3);
       });
@@ -222,13 +254,23 @@ describe('SqliteAgentRepository', () => {
 
         // Create a message
         const db = databaseService.getDatabase();
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run('test-msg', agent.id.toString(), 1, 'assistant', 'Test content', new Date().toISOString());
+        `
+        ).run(
+          'test-msg',
+          agent.id.toString(),
+          1,
+          'assistant',
+          'Test content',
+          new Date().toISOString()
+        );
 
         // Get the rowid of the agent row (INSERT OR REPLACE would change this)
-        const rowBefore = db.prepare('SELECT rowid, * FROM agents WHERE id = ?')
+        const rowBefore = db
+          .prepare('SELECT rowid, * FROM agents WHERE id = ?')
           .get(agent.id.toString()) as { rowid: number };
 
         // Act: Update agent
@@ -236,13 +278,13 @@ describe('SqliteAgentRepository', () => {
         await repository.save(agent);
 
         // Assert: rowid should remain the same (proving UPDATE was used, not INSERT)
-        const rowAfter = db.prepare('SELECT rowid, * FROM agents WHERE id = ?')
+        const rowAfter = db
+          .prepare('SELECT rowid, * FROM agents WHERE id = ?')
           .get(agent.id.toString()) as { rowid: number };
         expect(rowAfter.rowid).toBe(rowBefore.rowid);
 
         // Assert: Message should still exist
-        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?')
-          .get('test-msg');
+        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?').get('test-msg');
         expect(message).toBeDefined();
       });
 
@@ -259,8 +301,7 @@ describe('SqliteAgentRepository', () => {
 
         // Assert: Agent exists in database
         const db = databaseService.getDatabase();
-        const row = db.prepare('SELECT * FROM agents WHERE id = ?')
-          .get(agent.id.toString());
+        const row = db.prepare('SELECT * FROM agents WHERE id = ?').get(agent.id.toString());
         expect(row).toBeDefined();
       });
 
@@ -275,10 +316,12 @@ describe('SqliteAgentRepository', () => {
 
         // Create messages
         const db = databaseService.getDatabase();
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run('msg-1', agent.id.toString(), 1, 'assistant', 'Content', new Date().toISOString());
+        `
+        ).run('msg-1', agent.id.toString(), 1, 'assistant', 'Content', new Date().toISOString());
 
         // Act: Update multiple fields
         agent.markAsRunning();
@@ -294,8 +337,7 @@ describe('SqliteAgentRepository', () => {
         expect(found?.completedAt).toBeDefined();
 
         // Assert: Message still exists
-        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?')
-          .get('msg-1');
+        const message = db.prepare('SELECT * FROM agent_messages WHERE id = ?').get('msg-1');
         expect(message).toBeDefined();
       });
     });

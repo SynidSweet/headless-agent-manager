@@ -66,13 +66,17 @@ describe('Message Persistence Integrity (Integration)', () => {
     const fakeAgentId = '00000000-0000-0000-0000-000000000000';
 
     // Act & Assert - Should fail with FK error
-    await expect(
-      messageService.saveMessage({
+    try {
+      await messageService.saveMessage({
         agentId: fakeAgentId,
         type: 'assistant',
         content: 'Should fail',
-      })
-    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      });
+      // If we reach here, test should fail
+      fail('Expected FK constraint error but none was thrown');
+    } catch (error: any) {
+      expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+    }
   });
 
   it('should assign monotonically increasing sequence numbers', async () => {

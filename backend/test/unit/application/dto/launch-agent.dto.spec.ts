@@ -161,6 +161,48 @@ describe('LaunchAgentDto', () => {
       expect(dto.configuration.workingDirectory).toBe('./my-project');
     });
 
+    it('should allow conversationName in configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        conversationName: 'My Important Task',
+      };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+      expect(dto.configuration.conversationName).toBe('My Important Task');
+    });
+
+    it('should allow model in configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        model: 'claude-sonnet-4-5-20250929',
+      };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+      expect(dto.configuration.model).toBe('claude-sonnet-4-5-20250929');
+    });
+
+    it('should allow alternative model in configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        model: 'claude-opus-4-20250514',
+      };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+      expect(dto.configuration.model).toBe('claude-opus-4-20250514');
+    });
+
     it('should work without configuration', () => {
       // Arrange
       const dto = new LaunchAgentDto();
@@ -170,6 +212,63 @@ describe('LaunchAgentDto', () => {
       // Act & Assert
       expect(() => dto.validate()).not.toThrow();
       expect(dto.configuration).toBeUndefined();
+    });
+  });
+
+  describe('conversation name validation', () => {
+    it('should pass validation with valid conversation name', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = { conversationName: 'My Task' };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+    });
+
+    it('should throw error when conversation name is empty string after trim', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = { conversationName: '   ' };
+
+      // Act & Assert
+      expect(() => dto.validate()).toThrow('Conversation name cannot be empty');
+    });
+
+    it('should throw error when conversation name exceeds 100 characters', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = { conversationName: 'a'.repeat(101) };
+
+      // Act & Assert
+      expect(() => dto.validate()).toThrow('Conversation name must be 100 characters or less');
+    });
+
+    it('should accept conversation name at 100 character limit', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = { conversationName: 'a'.repeat(100) };
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
+    });
+
+    it('should pass validation without conversation name', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {};
+
+      // Act & Assert
+      expect(() => dto.validate()).not.toThrow();
     });
   });
 
@@ -230,6 +329,66 @@ describe('LaunchAgentDto', () => {
 
       // Assert
       expect(config.workingDirectory).toBe('./my-project');
+    });
+
+    it('should include conversationName in converted configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        conversationName: 'My Important Task',
+      };
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.conversationName).toBe('My Important Task');
+    });
+
+    it('should not include conversationName when not provided', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {};
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.conversationName).toBeUndefined();
+    });
+
+    it('should include model in converted configuration', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {
+        model: 'claude-sonnet-4-5-20250929',
+      };
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.model).toBe('claude-sonnet-4-5-20250929');
+    });
+
+    it('should not include model when not provided', () => {
+      // Arrange
+      const dto = new LaunchAgentDto();
+      dto.type = 'claude-code';
+      dto.prompt = 'Test prompt';
+      dto.configuration = {};
+
+      // Act
+      const config = dto.toAgentConfiguration();
+
+      // Assert
+      expect(config.model).toBeUndefined();
     });
 
     it('should return empty configuration when no configuration provided', () => {

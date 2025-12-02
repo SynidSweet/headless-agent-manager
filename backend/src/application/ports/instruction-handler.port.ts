@@ -35,9 +35,7 @@ export interface IInstructionHandler {
    * @returns Backup data, or null if no instructions
    * @throws Error if file operations fail
    */
-  prepareEnvironment(
-    instructions: string | undefined
-  ): Promise<ClaudeFileBackup | null>;
+  prepareEnvironment(instructions: string | undefined): Promise<ClaudeFileBackup | null>;
 
   /**
    * Restores CLAUDE.md files from backup.

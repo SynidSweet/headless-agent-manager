@@ -12,9 +12,12 @@ describe('ClaudeMessageParser', () => {
 
   describe('parse', () => {
     it('should parse system init message', () => {
-      const line = '{"type":"system","role":"init","content":"Session started","session_id":"test-123"}';
+      const line =
+        '{"type":"system","role":"init","content":"Session started","session_id":"test-123"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('system');
       expect(message.role).toBe('init');
@@ -26,6 +29,8 @@ describe('ClaudeMessageParser', () => {
       const line = '{"type":"user","content":"Create a fibonacci function"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('user');
       expect(message.content).toBe('Create a fibonacci function');
@@ -35,15 +40,20 @@ describe('ClaudeMessageParser', () => {
       const line = '{"type":"assistant","content":"I will help you create that function"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('assistant');
       expect(message.content).toBe('I will help you create that function');
     });
 
     it('should parse system result message with stats', () => {
-      const line = '{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78}}}';
+      const line =
+        '{"type":"system","role":"result","stats":{"duration":1234,"tokens":{"prompt":45,"completion":78}}}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('response'); // result messages are now mapped to response
       expect(message.role).toBe('result');
@@ -57,6 +67,8 @@ describe('ClaudeMessageParser', () => {
       const line = '{"type":"error","content":"CLI error occurred","error_code":"CLI_ERROR"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('error');
       expect(message.content).toBe('CLI error occurred');
@@ -64,9 +76,12 @@ describe('ClaudeMessageParser', () => {
     });
 
     it('should handle message with complex content object', () => {
-      const line = '{"type":"assistant","content":{"text":"Response","code":"function() {}","language":"typescript"}}';
+      const line =
+        '{"type":"assistant","content":{"text":"Response","code":"function() {}","language":"typescript"}}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('assistant');
       expect(message.content).toEqual({
@@ -98,15 +113,20 @@ describe('ClaudeMessageParser', () => {
       const line = '{"type":"system","role":"result","stats":{"duration":100}}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('response'); // result messages are now mapped to response
       expect(message.metadata?.stats).toEqual({ duration: 100 });
     });
 
     it('should preserve all metadata fields', () => {
-      const line = '{"type":"assistant","content":"test","metadata":{"key":"value"},"extra":"data"}';
+      const line =
+        '{"type":"assistant","content":"test","metadata":{"key":"value"},"extra":"data"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.metadata?.extra).toBe('data');
     });
@@ -118,14 +138,15 @@ describe('ClaudeMessageParser', () => {
       const content = readFileSync(fixturePath, 'utf-8');
       const lines = content.trim().split('\n');
 
-      const messages: AgentMessage[] = lines.map((line) => parser.parse(line));
+      const messages: (AgentMessage | null)[] = lines.map((line) => parser.parse(line));
+      const validMessages = messages.filter((m): m is AgentMessage => m !== null);
 
-      expect(messages.length).toBe(6);
-      expect(messages[0]!.type).toBe('system');
-      expect(messages[1]!.type).toBe('user');
-      expect(messages[2]!.type).toBe('assistant');
-      expect(messages[5]!.type).toBe('response'); // result messages are now mapped to response
-      expect(messages[5]!.role).toBe('result');
+      expect(validMessages.length).toBe(6);
+      expect(validMessages[0]!.type).toBe('system');
+      expect(validMessages[1]!.type).toBe('user');
+      expect(validMessages[2]!.type).toBe('assistant');
+      expect(validMessages[5]!.type).toBe('response'); // result messages are now mapped to response
+      expect(validMessages[5]!.role).toBe('result');
     });
 
     it('should parse error fixture', () => {
@@ -133,11 +154,12 @@ describe('ClaudeMessageParser', () => {
       const content = readFileSync(fixturePath, 'utf-8');
       const lines = content.trim().split('\n');
 
-      const messages: AgentMessage[] = lines.map((line) => parser.parse(line));
+      const messages: (AgentMessage | null)[] = lines.map((line) => parser.parse(line));
+      const validMessages = messages.filter((m): m is AgentMessage => m !== null);
 
-      expect(messages.length).toBe(3);
-      expect(messages[2]!.type).toBe('error');
-      expect(messages[2]!.content).toContain('CLI error');
+      expect(validMessages.length).toBe(3);
+      expect(validMessages[2]!.type).toBe('error');
+      expect(validMessages[2]!.content).toContain('CLI error');
     });
   });
 
@@ -145,6 +167,8 @@ describe('ClaudeMessageParser', () => {
     it('should return true when result message is received', () => {
       const line = '{"type":"system","role":"result","stats":{}}';
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(parser.isComplete(message)).toBe(true);
     });
@@ -152,6 +176,8 @@ describe('ClaudeMessageParser', () => {
     it('should return true for type=result messages', () => {
       const line = '{"type":"result","subtype":"success","duration_ms":1234}';
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(parser.isComplete(message)).toBe(true);
     });
@@ -159,6 +185,8 @@ describe('ClaudeMessageParser', () => {
     it('should return false for non-result messages', () => {
       const line = '{"type":"assistant","content":"test"}';
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(parser.isComplete(message)).toBe(false);
     });
@@ -166,6 +194,8 @@ describe('ClaudeMessageParser', () => {
     it('should return false for system init message', () => {
       const line = '{"type":"system","role":"init","content":"started"}';
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(parser.isComplete(message)).toBe(false);
     });
@@ -177,6 +207,8 @@ describe('ClaudeMessageParser', () => {
         '{"type":"system","subtype":"init","session_id":"test-123","model":"claude-sonnet-4"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('system');
       expect(message.metadata?.subtype).toBe('init');
@@ -188,6 +220,8 @@ describe('ClaudeMessageParser', () => {
         '{"type":"assistant","message":{"model":"claude-sonnet-4","role":"assistant","content":[{"type":"text","text":"Hello"}]}}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('assistant');
       expect(message.content).toBeDefined();
@@ -198,6 +232,8 @@ describe('ClaudeMessageParser', () => {
         '{"type":"result","subtype":"success","duration_ms":1234,"total_cost_usd":0.001,"session_id":"test-123"}';
 
       const message = parser.parse(line);
+      expect(message).not.toBeNull();
+      if (!message) throw new Error('Message should not be null');
 
       expect(message.type).toBe('response'); // result is mapped to response
       expect(message.metadata?.subtype).toBe('success');
@@ -211,13 +247,14 @@ describe('ClaudeMessageParser', () => {
       const lines = content.trim().split('\n');
 
       const messages = lines.map((line) => parser.parse(line));
+      const validMessages = messages.filter((m): m is AgentMessage => m !== null);
 
-      expect(messages.length).toBe(3);
-      expect(messages[0]!.type).toBe('system');
-      expect(messages[0]!.metadata?.subtype).toBe('init');
-      expect(messages[1]!.type).toBe('assistant');
-      expect(messages[2]!.type).toBe('response'); // result is mapped to response
-      expect(messages[2]!.metadata?.subtype).toBe('success');
+      expect(validMessages.length).toBe(3);
+      expect(validMessages[0]!.type).toBe('system');
+      expect(validMessages[0]!.metadata?.subtype).toBe('init');
+      expect(validMessages[1]!.type).toBe('assistant');
+      expect(validMessages[2]!.type).toBe('response'); // result is mapped to response
+      expect(validMessages[2]!.metadata?.subtype).toBe('success');
     });
   });
 
@@ -228,6 +265,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_123","name":"Bash","input":{"command":"ls -la"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('Bash');
@@ -239,6 +278,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"/test.txt"}},{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"/output.txt"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('Read');
@@ -250,6 +291,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Let me check that file"},{"type":"tool_use","id":"toolu_123","name":"Read","input":{"file_path":"/test.txt"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         // If there's both text and tool_use, we should split into assistant for text
         // But the current implementation combines them. We need to decide:
@@ -266,6 +309,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_123","name":"Task","input":{"description":"Complex task","prompt":"Do something","subagent_type":"general"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('Task');
@@ -279,6 +324,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"result","subtype":"success","duration_ms":5000,"session_id":"test-123"}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('response');
         expect(message.metadata?.subtype).toBe('success');
@@ -289,6 +336,8 @@ describe('ClaudeMessageParser', () => {
         const line = '{"type":"system","role":"result","stats":{"duration":1234}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('response');
         expect(message.role).toBe('result');
@@ -300,6 +349,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"result","subtype":"error","duration_ms":1000,"error":"Something went wrong"}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('response');
         expect(message.metadata?.subtype).toBe('error');
@@ -311,6 +362,8 @@ describe('ClaudeMessageParser', () => {
         const line = '{"type":"assistant","content":"Hello world"}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.raw).toBe(line);
       });
@@ -320,6 +373,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Test"}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.raw).toBe(line);
       });
@@ -329,6 +384,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"pwd"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.raw).toBe(line);
       });
@@ -337,6 +394,8 @@ describe('ClaudeMessageParser', () => {
         const line = '{"type":"result","subtype":"success","duration_ms":1234}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.raw).toBe(line);
       });
@@ -348,6 +407,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"This is a text response"}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('assistant');
         expect(message.content).toBe('This is a text response');
@@ -358,6 +419,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"echo test"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
       });
@@ -367,6 +430,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Running command"},{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('Running command');
@@ -380,6 +445,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_123","content":"Command output here","is_error":false}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('user');
         expect(message.content).toContain('✓ Result:');
@@ -391,6 +458,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_123","content":"Permission denied","is_error":true}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('user');
         expect(message.content).toContain('❌ Error:');
@@ -402,6 +471,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_123","content":"Line 1\\nLine 2\\nLine 3","is_error":false}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('user');
         expect(message.content).toContain('Line 1');
@@ -415,6 +486,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"ls -la","description":"List files in directory"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('List files in directory');
@@ -430,6 +503,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Edit","input":{"file_path":"/test.js","description":"Update function name"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toContain('Update function name');
@@ -441,6 +516,8 @@ describe('ClaudeMessageParser', () => {
           '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"pwd"}}]}}';
 
         const message = parser.parse(line);
+        expect(message).not.toBeNull();
+        if (!message) throw new Error('Message should not be null');
 
         expect(message.type).toBe('tool');
         expect(message.content).toBe('[Bash] $ pwd');

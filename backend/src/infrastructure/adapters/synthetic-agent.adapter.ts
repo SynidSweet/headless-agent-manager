@@ -76,7 +76,9 @@ export class SyntheticAgentAdapter implements IAgentRunner {
    */
   configure(agentId: AgentId, config: SyntheticAgentConfig): void {
     this.configs.set(agentId.toString(), config);
-    this.logger.log(`Configured synthetic agent ${agentId.toString()} with ${config.schedule.length} events`);
+    this.logger.log(
+      `Configured synthetic agent ${agentId.toString()} with ${config.schedule.length} events`
+    );
   }
 
   /**
@@ -118,9 +120,7 @@ export class SyntheticAgentAdapter implements IAgentRunner {
     config.schedule.forEach((event) => {
       const timer = setTimeout(() => {
         const elapsed = Date.now() - startTime;
-        this.logger.debug(
-          `[T+${elapsed}ms] Synthetic agent ${agentKey} emitting: ${event.type}`
-        );
+        this.logger.debug(`[T+${elapsed}ms] Synthetic agent ${agentKey} emitting: ${event.type}`);
 
         this.emitEvent(agentId, event);
       }, event.delay);
@@ -171,7 +171,9 @@ export class SyntheticAgentAdapter implements IAgentRunner {
 
     // **BUG FIX**: Check if observer already subscribed (prevent duplicates)
     if (observers.includes(observer)) {
-      this.logger.debug(`Observer already subscribed to synthetic agent ${agentKey} - skipping duplicate`);
+      this.logger.debug(
+        `Observer already subscribed to synthetic agent ${agentKey} - skipping duplicate`
+      );
       return;
     }
 

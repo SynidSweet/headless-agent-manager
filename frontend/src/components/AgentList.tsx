@@ -140,19 +140,46 @@ export function AgentList({
                   gap: tokens.spacing.sm,
                 }}
               >
-                <div
-                  style={{
-                    fontSize: tokens.typography.fontSize.sm,
-                    color: tokens.colors.text,
-                    fontFamily: tokens.typography.fontFamilyMono,
-                    backgroundColor: tokens.colors.backgroundSecondary,
-                    padding: tokens.spacing.sm,
-                    borderRadius: tokens.borderRadius.sm,
-                  }}
-                >
-                  {(agent.session?.prompt || '').substring(0, 100) || 'No prompt'}
-                  {(agent.session?.prompt || '').length > 100 ? '...' : ''}
-                </div>
+                {agent.session?.configuration?.conversationName ? (
+                  // Has conversation name: show it prominently with prompt as subtitle
+                  <>
+                    <div
+                      style={{
+                        fontSize: tokens.typography.fontSize.lg,
+                        fontWeight: 'bold',
+                        color: tokens.colors.text,
+                      }}
+                    >
+                      {agent.session.configuration.conversationName}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: tokens.typography.fontSize.sm,
+                        color: tokens.colors.textSecondary,
+                        fontFamily: tokens.typography.fontFamilyMono,
+                        fontStyle: 'italic',
+                      }}
+                    >
+                      {(agent.session.prompt || '').substring(0, 80)}
+                      {(agent.session.prompt || '').length > 80 ? '...' : ''}
+                    </div>
+                  </>
+                ) : (
+                  // No conversation name: show prompt as main content
+                  <div
+                    style={{
+                      fontSize: tokens.typography.fontSize.sm,
+                      color: tokens.colors.text,
+                      fontFamily: tokens.typography.fontFamilyMono,
+                      backgroundColor: tokens.colors.backgroundSecondary,
+                      padding: tokens.spacing.sm,
+                      borderRadius: tokens.borderRadius.sm,
+                    }}
+                  >
+                    {(agent.session?.prompt || '').substring(0, 100) || 'No prompt'}
+                    {(agent.session?.prompt || '').length > 100 ? '...' : ''}
+                  </div>
+                )}
                 <div
                   style={{
                     display: 'flex',

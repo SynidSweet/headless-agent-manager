@@ -41,16 +41,36 @@ export class LaunchRequest {
     instructions?: string,
     sessionId?: string,
     metadata?: Record<string, unknown>,
-    configuration?: Partial<AgentConfiguration>,
+    configuration?: Partial<AgentConfiguration>
   ) {
     // Use Object.defineProperty to make properties truly readonly and immutable
     Object.defineProperty(this, 'id', { value: id, writable: false, configurable: false });
-    Object.defineProperty(this, 'agentType', { value: agentType, writable: false, configurable: false });
+    Object.defineProperty(this, 'agentType', {
+      value: agentType,
+      writable: false,
+      configurable: false,
+    });
     Object.defineProperty(this, 'prompt', { value: prompt, writable: false, configurable: false });
-    Object.defineProperty(this, 'instructions', { value: instructions, writable: false, configurable: false });
-    Object.defineProperty(this, 'sessionId', { value: sessionId, writable: false, configurable: false });
-    Object.defineProperty(this, 'metadata', { value: metadata, writable: false, configurable: false });
-    Object.defineProperty(this, 'configuration', { value: configuration, writable: false, configurable: false });
+    Object.defineProperty(this, 'instructions', {
+      value: instructions,
+      writable: false,
+      configurable: false,
+    });
+    Object.defineProperty(this, 'sessionId', {
+      value: sessionId,
+      writable: false,
+      configurable: false,
+    });
+    Object.defineProperty(this, 'metadata', {
+      value: metadata,
+      writable: false,
+      configurable: false,
+    });
+    Object.defineProperty(this, 'configuration', {
+      value: configuration,
+      writable: false,
+      configurable: false,
+    });
   }
 
   /**
@@ -82,7 +102,7 @@ export class LaunchRequest {
       data.instructions,
       data.sessionId,
       data.metadata,
-      data.configuration,
+      data.configuration
     );
   }
 

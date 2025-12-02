@@ -12,11 +12,13 @@ describe('HealthController', () => {
   let orchestrationService: jest.Mocked<AgentOrchestrationService>;
 
   // Helper to create mock InstanceMetadata
-  const createMockMetadata = (overrides?: Partial<{
-    pid: number;
-    uptime: number;
-    databaseStatus: 'connected' | 'disconnected';
-  }>): InstanceMetadata => {
+  const createMockMetadata = (
+    overrides?: Partial<{
+      pid: number;
+      uptime: number;
+      databaseStatus: 'connected' | 'disconnected';
+    }>
+  ): InstanceMetadata => {
     const defaults = {
       pid: 12345,
       uptime: 3600,

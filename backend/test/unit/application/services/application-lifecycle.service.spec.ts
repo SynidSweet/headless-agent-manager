@@ -258,11 +258,7 @@ describe('ApplicationLifecycleService', () => {
       await service.shutdown();
 
       // Assert
-      expect(callOrder).toEqual([
-        'listActiveAgents',
-        'database.close',
-        'lockManager.releaseLock',
-      ]);
+      expect(callOrder).toEqual(['listActiveAgents', 'database.close', 'lockManager.releaseLock']);
     });
 
     it('should log shutdown event', async () => {

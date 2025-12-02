@@ -15,6 +15,8 @@ export interface AgentConfiguration {
   metadata?: Record<string, unknown>; // Additional metadata for tracking/context
   agentId?: string; // Workaround: Pass agent ID to runner (TODO: refactor interface)
   workingDirectory?: string; // Working directory for the agent process
+  conversationName?: string; // Human-readable name for the session (max 100 chars)
+  model?: string; // Claude model to use (e.g., 'claude-sonnet-4-5-20250929')
 }
 
 /**
@@ -46,7 +48,26 @@ export class Session {
       throw new DomainException('Session prompt cannot be empty');
     }
 
-    return new Session(trimmedPrompt, configuration);
+    // Validate conversation name if provided
+    let validatedConfig = { ...configuration };
+    if (configuration.conversationName !== undefined) {
+      const trimmedName = configuration.conversationName.trim();
+
+      if (trimmedName.length === 0) {
+        throw new DomainException('Conversation name cannot be empty');
+      }
+
+      if (trimmedName.length > 100) {
+        throw new DomainException('Conversation name must be 100 characters or less');
+      }
+
+      validatedConfig = {
+        ...configuration,
+        conversationName: trimmedName,
+      };
+    }
+
+    return new Session(trimmedPrompt, validatedConfig);
   }
 
   /**

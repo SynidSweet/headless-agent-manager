@@ -139,11 +139,12 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
 
     // Wait for agent to process (real Claude CLI takes 10-20 seconds)
     // The agent should exist and respond
-    await new Promise(resolve => setTimeout(resolve, 15000)); // Wait for processing
+    await new Promise((resolve) => setTimeout(resolve, 15000)); // Wait for processing
 
     try {
-      const statusResponse = await request(app.getHttpServer())
-        .get(`/api/agents/${agentId}/status`);
+      const statusResponse = await request(app.getHttpServer()).get(
+        `/api/agents/${agentId}/status`
+      );
 
       // Agent should exist
       expect([200, 404]).toContain(statusResponse.status);
@@ -189,13 +190,10 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Terminate agent
-    await request(app.getHttpServer())
-      .delete(`/api/agents/${agentId}`)
-      .expect(204);
+    await request(app.getHttpServer()).delete(`/api/agents/${agentId}`).expect(204);
 
     // Verify agent is terminated (should return 404 or completed status)
-    const statusResponse = await request(app.getHttpServer())
-      .get(`/api/agents/${agentId}/status`);
+    const statusResponse = await request(app.getHttpServer()).get(`/api/agents/${agentId}/status`);
 
     // Either 404 (cleaned up) or status is not RUNNING
     if (statusResponse.status === 200) {
@@ -229,11 +227,10 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
     const agentId = launchResponse.body.agentId;
 
     // Wait for processing
-    await new Promise(resolve => setTimeout(resolve, 15000));
+    await new Promise((resolve) => setTimeout(resolve, 15000));
 
     // Verify agent exists and has processed
-    const statusResponse = await request(app.getHttpServer())
-      .get(`/api/agents/${agentId}/status`);
+    const statusResponse = await request(app.getHttpServer()).get(`/api/agents/${agentId}/status`);
 
     expect([200, 404]).toContain(statusResponse.status);
     console.log(`✅ Agent processed successfully`);
@@ -251,13 +248,11 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
     }
 
     // Launch agent (this should succeed even if Claude returns an error)
-    const launchResponse = await request(app.getHttpServer())
-      .post('/api/agents')
-      .send({
-        type: 'claude-code',
-        prompt: '', // Empty prompt might cause issues
-        configuration: {},
-      });
+    const launchResponse = await request(app.getHttpServer()).post('/api/agents').send({
+      type: 'claude-code',
+      prompt: '', // Empty prompt might cause issues
+      configuration: {},
+    });
 
     // Launch might fail with 400 (validation) or succeed but agent fails
     // Either is acceptable - we're testing error handling
@@ -267,8 +262,9 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
       // Wait a bit and check status
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      const statusResponse = await request(app.getHttpServer())
-        .get(`/api/agents/${agentId}/status`);
+      const statusResponse = await request(app.getHttpServer()).get(
+        `/api/agents/${agentId}/status`
+      );
 
       // Agent should exist (either running, completed, or failed)
       expect([200, 404]).toContain(statusResponse.status);
@@ -412,7 +408,9 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
     expect(messages.length).toBeGreaterThanOrEqual(3);
 
     // Verify sequence numbers are sequential
-    const sequenceNumbers = messages.map((m: any) => m.sequenceNumber).sort((a: number, b: number) => a - b);
+    const sequenceNumbers = messages
+      .map((m: any) => m.sequenceNumber)
+      .sort((a: number, b: number) => a - b);
     for (let i = 0; i < sequenceNumbers.length; i++) {
       expect(sequenceNumbers[i]).toBe(i + 1);
     }
@@ -440,7 +438,8 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
         .post('/api/agents')
         .send({
           type: 'claude-code',
-          prompt: 'Use the Bash tool to run "pwd" and tell me the current directory. Also check if marker.txt exists.',
+          prompt:
+            'Use the Bash tool to run "pwd" and tell me the current directory. Also check if marker.txt exists.',
           configuration: {
             workingDirectory: testDir,
           },
@@ -464,7 +463,6 @@ describe('Python Proxy Smoke Tests (REAL)', () => {
       // Verify agent mentioned the test directory
       expect(allContent).toContain(testDir);
       console.log('✅ Agent executed in correct working directory');
-
     } finally {
       // Cleanup
       execSync(`rm -rf ${testDir}`);

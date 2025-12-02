@@ -1,7 +1,10 @@
 import { Controller, Post, Get, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
 import { DatabaseService } from '@infrastructure/database/database.service';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
-import { SyntheticAgentAdapter, SyntheticEvent } from '@infrastructure/adapters/synthetic-agent.adapter';
+import {
+  SyntheticAgentAdapter,
+  SyntheticEvent,
+} from '@infrastructure/adapters/synthetic-agent.adapter';
 import { StreamingService } from '@application/services/streaming.service';
 import { AgentGateway } from '@application/gateways/agent.gateway';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
@@ -52,8 +55,14 @@ export class TestController {
     // Force WAL checkpoint before reading
     database.pragma('wal_checkpoint(FULL)');
 
-    const totalCount = database.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as { c: number };
-    const messages = database.prepare('SELECT id, agent_id, sequence_number, type, substr(content, 1, 40) as content FROM agent_messages LIMIT 10').all();
+    const totalCount = database.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as {
+      c: number;
+    };
+    const messages = database
+      .prepare(
+        'SELECT id, agent_id, sequence_number, type, substr(content, 1, 40) as content FROM agent_messages LIMIT 10'
+      )
+      .all();
 
     return {
       totalCount: totalCount.c,
@@ -135,8 +144,14 @@ export class TestController {
     // **CRITICAL FIX**: Auto-subscribe via StreamingService (like AgentOrchestrationService does)
     // This ensures messages are persisted to database even if no WebSocket clients are connected
     // Use 'system-test-controller' as client ID to indicate this is test controller initiated
-    this.streamingService.subscribeToAgent(agent.id, 'system-test-controller', this.syntheticAdapter);
-    this.logger.log(`Auto-subscribed to synthetic agent ${agent.id.toString()} for message persistence`);
+    this.streamingService.subscribeToAgent(
+      agent.id,
+      'system-test-controller',
+      this.syntheticAdapter
+    );
+    this.logger.log(
+      `Auto-subscribed to synthetic agent ${agent.id.toString()} for message persistence`
+    );
 
     this.logger.log(
       `Synthetic agent ${agent.id.toString()} launched with ${dto.schedule.length} scheduled events`
@@ -155,11 +170,11 @@ export class TestController {
           session: {
             id: agent.session.id,
             prompt: agent.session.prompt,
-            messageCount: 0
+            messageCount: 0,
           },
           createdAt: agent.createdAt.toISOString(),
           startedAt: agent.startedAt?.toISOString() || null,
-          completedAt: null
+          completedAt: null,
         },
         timestamp: new Date().toISOString(),
       });

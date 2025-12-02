@@ -28,6 +28,9 @@ describe('Agent Status Persistence (Integration)', () => {
   let mockAgentFactory: jest.Mocked<IAgentFactory>;
   let mockAgentRunner: jest.Mocked<IAgentRunner>;
   let mockStreamingService: jest.Mocked<StreamingService>;
+  let mockLaunchQueue: any;
+  let mockInstructionHandler: any;
+  let mockMessageService: any;
 
   beforeEach(() => {
     // Use REAL database (in-memory for speed)
@@ -52,11 +55,45 @@ describe('Agent Status Persistence (Integration)', () => {
       subscribeToAgent: jest.fn(),
     } as any;
 
+    // Mock launch queue
+    mockLaunchQueue = {
+      enqueue: jest.fn().mockImplementation(async (request) => {
+        // Simulate queue processing by calling launchAgentDirect
+        return orchestrationService.launchAgentDirect(request);
+      }),
+      getQueueLength: jest.fn().mockReturnValue(0),
+      cancelRequest: jest.fn(),
+    };
+
+    // Mock instruction handler
+    mockInstructionHandler = {
+      prepareEnvironment: jest.fn().mockResolvedValue(null),
+      restoreEnvironment: jest.fn().mockResolvedValue(undefined),
+    };
+
+    // Mock message service
+    mockMessageService = {
+      saveMessage: jest.fn().mockResolvedValue({
+        id: 'msg-uuid',
+        agentId: 'agent-id',
+        sequenceNumber: 1,
+        type: 'user',
+        role: 'user',
+        content: 'test',
+        createdAt: new Date().toISOString(),
+      }),
+      findByAgentId: jest.fn().mockResolvedValue([]),
+      findByAgentIdSince: jest.fn().mockResolvedValue([]),
+    };
+
     // Service uses REAL repository
     orchestrationService = new AgentOrchestrationService(
       mockAgentFactory,
       repository,
-      mockStreamingService
+      mockStreamingService,
+      mockLaunchQueue,
+      mockInstructionHandler,
+      mockMessageService
     );
   });
 

@@ -53,11 +53,7 @@ describe('Streaming + Persistence Integration', () => {
       isClientConnected: jest.fn().mockReturnValue(true),
     };
 
-    streamingService = new StreamingService(
-      mockWebSocketGateway,
-      repository,
-      messageService
-    );
+    streamingService = new StreamingService(mockWebSocketGateway, repository, messageService);
   });
 
   afterEach(() => {
@@ -567,18 +563,30 @@ describe('Streaming + Persistence Integration', () => {
     });
 
     it('should enforce foreign key constraints on message save', async () => {
+      // Arrange: Verify FK constraints are enabled
+      const database = databaseService.getDatabase();
+      const fkEnabled = database.pragma('foreign_keys', { simple: true });
+      expect(fkEnabled).toBe(1);
+
       // Arrange: Non-existent agent ID
       const fakeAgentId = AgentId.generate();
 
+      // Verify agent does NOT exist
+      const agentExists = database.prepare('SELECT id FROM agents WHERE id = ?').get(fakeAgentId.toString());
+      expect(agentExists).toBeUndefined();
+
       // Act & Assert: Should throw FK constraint error
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: fakeAgentId.toString(),
           type: 'assistant',
           content: 'This should fail',
           role: 'assistant',
-        })
-      ).rejects.toThrow();
+        });
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY/);
+      }
     });
   });
 

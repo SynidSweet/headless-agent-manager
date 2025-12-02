@@ -10,7 +10,10 @@
  * This test verifies the bug and ensures the fix works.
  */
 
-import { SyntheticAgentAdapter, SyntheticEvent } from '@infrastructure/adapters/synthetic-agent.adapter';
+import {
+  SyntheticAgentAdapter,
+  SyntheticEvent,
+} from '@infrastructure/adapters/synthetic-agent.adapter';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { Session } from '@domain/value-objects/session.vo';
 
@@ -72,12 +75,12 @@ describe('Duplicate Observer Bug (Unit)', () => {
     await adapter.start(session);
 
     // Wait for all events to fire
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Assert: BUG - Should get 5 messages, but gets 10 (each message sent to 2 observers)
     console.log(`Messages received: ${messagesReceived.length}`);
-    console.log('Observer 1 messages:', messagesReceived.filter(m => m.observer === 1).length);
-    console.log('Observer 2 messages:', messagesReceived.filter(m => m.observer === 2).length);
+    console.log('Observer 1 messages:', messagesReceived.filter((m) => m.observer === 1).length);
+    console.log('Observer 2 messages:', messagesReceived.filter((m) => m.observer === 2).length);
 
     // THIS TEST WILL FAIL until we fix the duplicate subscription bug
     // Currently: 10 messages (5 to observer1 + 5 to observer2)
@@ -117,7 +120,7 @@ describe('Duplicate Observer Bug (Unit)', () => {
 
     await adapter.start(session);
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Assert: Should only emit 2 messages (deduplicated)
     // After fix, this test should pass
@@ -151,13 +154,13 @@ describe('Duplicate Observer Bug (Unit)', () => {
     await adapter.start(session);
 
     // Wait for first message
-    await new Promise(resolve => setTimeout(resolve, 15));
+    await new Promise((resolve) => setTimeout(resolve, 15));
 
     // Unsubscribe before completion
     adapter.unsubscribe(agentId, observer);
 
     // Wait for completion event (should not be received)
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Assert: Should only have received first message (before unsubscribe)
     expect(messagesReceived.length).toBe(1);

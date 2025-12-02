@@ -11,8 +11,24 @@ export function AgentLaunchForm() {
   const [type, setType] = useState<AgentType>('claude-code');
   const [prompt, setPrompt] = useState('');
   const [workingDirectory, setWorkingDirectory] = useState('');
+  const [conversationName, setConversationName] = useState('');
+  const [model, setModel] = useState('default');
   const [isLaunching, setIsLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [nameError, setNameError] = useState<string | null>(null);
+
+  const validateConversationName = (value: string): boolean => {
+    if (value && value.trim().length === 0) {
+      setNameError('Conversation name cannot be empty');
+      return false;
+    }
+    if (value && value.length > 100) {
+      setNameError('Conversation name must be 100 characters or less');
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,6 +36,11 @@ export function AgentLaunchForm() {
 
     if (!prompt.trim()) {
       setError('Prompt is required');
+      return;
+    }
+
+    // Validate conversation name if provided
+    if (conversationName && !validateConversationName(conversationName)) {
       return;
     }
 
@@ -32,12 +53,16 @@ export function AgentLaunchForm() {
         configuration: {
           outputFormat: 'stream-json',
           ...(workingDirectory.trim() && { workingDirectory: workingDirectory.trim() }),
+          ...(conversationName.trim() && { conversationName: conversationName.trim() }),
+          ...(model !== 'default' && { model }),
         },
       };
 
       await dispatch(actions.launchAgent(request)).unwrap();
       setPrompt('');
       setWorkingDirectory('');
+      setConversationName('');
+      setModel('default');
       // Agent automatically added to Redux via launchAgent.fulfilled action
       // WebSocket subscription automatically started via middleware
     } catch (err) {
@@ -117,6 +142,44 @@ export function AgentLaunchForm() {
           }}
         >
           <label
+            htmlFor="model"
+            style={{
+              fontWeight: '600',
+              fontSize: tokens.typography.fontSize.md,
+              color: tokens.colors.text,
+            }}
+          >
+            Model:
+          </label>
+          <select
+            id="model"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            style={{
+              padding: tokens.spacing.sm,
+              fontSize: tokens.typography.fontSize.md,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${tokens.colors.border}`,
+              backgroundColor: tokens.colors.background,
+              color: tokens.colors.text,
+            }}
+            disabled={isLaunching}
+          >
+            <option value="default">Default (Sonnet 4.5)</option>
+            <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Best for coding)</option>
+            <option value="claude-opus-4-5-20251101">Opus 4.5 (Most intelligent)</option>
+            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (Fastest)</option>
+          </select>
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.sm,
+          }}
+        >
+          <label
             htmlFor="agent-prompt"
             style={{
               fontWeight: '600',
@@ -180,6 +243,61 @@ export function AgentLaunchForm() {
             }}
             disabled={isLaunching}
           />
+        </div>
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: tokens.spacing.sm,
+          }}
+        >
+          <label
+            htmlFor="conversation-name"
+            style={{
+              fontWeight: '600',
+              fontSize: tokens.typography.fontSize.md,
+              color: tokens.colors.text,
+            }}
+          >
+            Conversation Name (Optional):
+          </label>
+          <input
+            id="conversation-name"
+            type="text"
+            value={conversationName}
+            onChange={(e) => setConversationName(e.target.value)}
+            onBlur={(e) => validateConversationName(e.target.value)}
+            placeholder="e.g., Fix login bug, Add dark mode"
+            maxLength={100}
+            style={{
+              padding: tokens.spacing.sm,
+              fontSize: tokens.typography.fontSize.md,
+              borderRadius: tokens.borderRadius.sm,
+              border: `1px solid ${nameError ? tokens.colors.danger : tokens.colors.border}`,
+              backgroundColor: tokens.colors.background,
+              color: tokens.colors.text,
+            }}
+            disabled={isLaunching}
+          />
+          {nameError && (
+            <div
+              style={{
+                fontSize: tokens.typography.fontSize.sm,
+                color: tokens.colors.danger,
+              }}
+            >
+              {nameError}
+            </div>
+          )}
+          <small
+            style={{
+              fontSize: tokens.typography.fontSize.sm,
+              color: tokens.colors.textSecondary,
+            }}
+          >
+            Max 100 characters. Helps organize your agent history.
+          </small>
         </div>
 
         {error && (

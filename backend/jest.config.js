@@ -50,5 +50,8 @@ module.exports = {
   },
   setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
   testTimeout: 10000,
-  verbose: true
+  verbose: true,
+  // Run tests serially to avoid database conflicts in integration tests
+  // Set TEST_PARALLEL=true to enable parallel execution for faster unit tests
+  maxWorkers: process.env.TEST_PARALLEL === 'true' ? undefined : 1
 };

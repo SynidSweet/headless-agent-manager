@@ -54,17 +54,19 @@ describe('InMemoryAgentLaunchQueue', () => {
       const processingTimes: number[] = [];
       const startTime = Date.now();
 
-      mockOrchestrationService.launchAgentDirect.mockImplementation(async (request: LaunchRequest) => {
-        const elapsed = Date.now() - startTime;
-        processingTimes.push(elapsed);
-        // Simulate async work
-        await new Promise(resolve => setTimeout(resolve, 50));
-        return Agent.create({
-          type: AgentType.CLAUDE_CODE,
-          prompt: request.prompt,
-          configuration: {},
-        });
-      });
+      mockOrchestrationService.launchAgentDirect.mockImplementation(
+        async (request: LaunchRequest) => {
+          const elapsed = Date.now() - startTime;
+          processingTimes.push(elapsed);
+          // Simulate async work
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          return Agent.create({
+            type: AgentType.CLAUDE_CODE,
+            prompt: request.prompt,
+            configuration: {},
+          });
+        }
+      );
 
       const requests = [
         LaunchRequest.create({ agentType: AgentType.CLAUDE_CODE, prompt: 'Request A' }),
@@ -73,7 +75,7 @@ describe('InMemoryAgentLaunchQueue', () => {
       ];
 
       // Enqueue all at once (should process sequentially)
-      const promises = requests.map(r => queue.enqueue(r));
+      const promises = requests.map((r) => queue.enqueue(r));
       const results = await Promise.all(promises);
 
       // Verify all completed
@@ -147,7 +149,7 @@ describe('InMemoryAgentLaunchQueue', () => {
 
     it('should return correct queue length for pending requests', async () => {
       mockOrchestrationService.launchAgentDirect.mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         return mockAgent;
       });
 
@@ -164,7 +166,7 @@ describe('InMemoryAgentLaunchQueue', () => {
       queue.enqueue(request2);
 
       // First is processing, second is pending
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
       expect(queue.getQueueLength()).toBe(1);
     });
 
@@ -178,7 +180,7 @@ describe('InMemoryAgentLaunchQueue', () => {
 
       const promise = queue.enqueue(request);
       // Queue starts processing immediately
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       await promise;
       expect(queue.getQueueLength()).toBe(0);
@@ -188,7 +190,7 @@ describe('InMemoryAgentLaunchQueue', () => {
   describe('cancelRequest', () => {
     it('should cancel pending request', async () => {
       mockOrchestrationService.launchAgentDirect.mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         return mockAgent;
       });
 
@@ -205,7 +207,7 @@ describe('InMemoryAgentLaunchQueue', () => {
       const promise2 = queue.enqueue(request2);
 
       // Give time for first to start processing
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       queue.cancelRequest(request2.id);
 
@@ -316,17 +318,19 @@ describe('InMemoryAgentLaunchQueue', () => {
       let activeCount = 0;
       let maxActiveCount = 0;
 
-      mockOrchestrationService.launchAgentDirect.mockImplementation(async (request: LaunchRequest) => {
-        activeCount++;
-        maxActiveCount = Math.max(maxActiveCount, activeCount);
-        await new Promise(resolve => setTimeout(resolve, 50));
-        activeCount--;
-        return Agent.create({
-          type: AgentType.CLAUDE_CODE,
-          prompt: request.prompt,
-          configuration: {},
-        });
-      });
+      mockOrchestrationService.launchAgentDirect.mockImplementation(
+        async (request: LaunchRequest) => {
+          activeCount++;
+          maxActiveCount = Math.max(maxActiveCount, activeCount);
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          activeCount--;
+          return Agent.create({
+            type: AgentType.CLAUDE_CODE,
+            prompt: request.prompt,
+            configuration: {},
+          });
+        }
+      );
 
       const requests = Array.from({ length: 10 }, (_, i) =>
         LaunchRequest.create({
@@ -335,7 +339,7 @@ describe('InMemoryAgentLaunchQueue', () => {
         })
       );
 
-      await Promise.all(requests.map(r => queue.enqueue(r)));
+      await Promise.all(requests.map((r) => queue.enqueue(r)));
 
       // Verify only 1 request was active at any time
       expect(maxActiveCount).toBe(1);
@@ -344,15 +348,17 @@ describe('InMemoryAgentLaunchQueue', () => {
     it('should process requests in FIFO order', async () => {
       const completionOrder: string[] = [];
 
-      mockOrchestrationService.launchAgentDirect.mockImplementation(async (request: LaunchRequest) => {
-        await new Promise(resolve => setTimeout(resolve, 10));
-        completionOrder.push(request.prompt);
-        return Agent.create({
-          type: AgentType.CLAUDE_CODE,
-          prompt: request.prompt,
-          configuration: {},
-        });
-      });
+      mockOrchestrationService.launchAgentDirect.mockImplementation(
+        async (request: LaunchRequest) => {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+          completionOrder.push(request.prompt);
+          return Agent.create({
+            type: AgentType.CLAUDE_CODE,
+            prompt: request.prompt,
+            configuration: {},
+          });
+        }
+      );
 
       const requests = [
         LaunchRequest.create({ agentType: AgentType.CLAUDE_CODE, prompt: 'First' }),
@@ -360,7 +366,7 @@ describe('InMemoryAgentLaunchQueue', () => {
         LaunchRequest.create({ agentType: AgentType.CLAUDE_CODE, prompt: 'Third' }),
       ];
 
-      await Promise.all(requests.map(r => queue.enqueue(r)));
+      await Promise.all(requests.map((r) => queue.enqueue(r)));
 
       expect(completionOrder).toEqual(['First', 'Second', 'Third']);
     });
@@ -372,7 +378,7 @@ describe('InMemoryAgentLaunchQueue', () => {
 
       mockOrchestrationService.launchAgentDirect.mockImplementation(async () => {
         queueLengths.push(queue.getQueueLength());
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise((resolve) => setTimeout(resolve, 20));
         return mockAgent;
       });
 
@@ -383,10 +389,10 @@ describe('InMemoryAgentLaunchQueue', () => {
       ];
 
       // Enqueue all
-      const promises = requests.map(r => queue.enqueue(r));
+      const promises = requests.map((r) => queue.enqueue(r));
 
       // Give time for first to start
-      await new Promise(resolve => setTimeout(resolve, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
 
       // During first processing, 2 should be pending
       expect(queue.getQueueLength()).toBeGreaterThanOrEqual(2);
@@ -397,12 +403,14 @@ describe('InMemoryAgentLaunchQueue', () => {
       expect(queue.getQueueLength()).toBe(0);
 
       // Queue length should have decreased as items were processed
-      expect(queueLengths[0] ?? 0).toBeGreaterThanOrEqual(queueLengths[queueLengths.length - 1] ?? 0);
+      expect(queueLengths[0] ?? 0).toBeGreaterThanOrEqual(
+        queueLengths[queueLengths.length - 1] ?? 0
+      );
     });
 
     it('should handle rapid sequential enqueues', async () => {
       mockOrchestrationService.launchAgentDirect.mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 5));
+        await new Promise((resolve) => setTimeout(resolve, 5));
         return mockAgent;
       });
 
@@ -413,7 +421,7 @@ describe('InMemoryAgentLaunchQueue', () => {
         })
       );
 
-      const results = await Promise.all(requests.map(r => queue.enqueue(r)));
+      const results = await Promise.all(requests.map((r) => queue.enqueue(r)));
 
       expect(results).toHaveLength(50);
       expect(queue.getQueueLength()).toBe(0);

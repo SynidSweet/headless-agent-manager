@@ -69,14 +69,18 @@ describe('Error Propagation & Recovery (Integration)', () => {
       const nonExistentAgentId = `fake-agent-${Date.now()}-${Math.random().toString(36)}`;
 
       // Act & Assert: Should fail with FK constraint error
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: nonExistentAgentId,
           type: 'assistant',
           role: 'test',
           content: 'Should fail due to FK violation',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
     });
 
     /**
@@ -89,21 +93,29 @@ describe('Error Propagation & Recovery (Integration)', () => {
       const agentId = `test-agent-retry-${Date.now()}-${Math.random().toString(36)}`;
 
       // First attempt fails (no agent exists - FK violation)
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId,
           type: 'assistant',
           role: 'test',
           content: 'First attempt',
-        })
-      ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+        });
+        // If we reach here, test should fail
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
 
       // Create agent
       const database = db.getDatabase();
-      database.prepare(`
+      database
+        .prepare(
+          `
         INSERT INTO agents (id, type, status, prompt, created_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(agentId, 'synthetic', 'running', 'test', new Date().toISOString());
+      `
+        )
+        .run(agentId, 'synthetic', 'running', 'test', new Date().toISOString());
 
       // Second attempt succeeds
       const message = await messageService.saveMessage({
@@ -141,15 +153,47 @@ describe('Error Propagation & Recovery (Integration)', () => {
       const repository = new SqliteAgentRepository(db);
 
       // Assert: Should handle schema mismatch gracefully (async)
-      await expect(repository.findAll()).rejects.toThrow();
+      try {
+        await repository.findAll();
+        fail('Expected schema error but none was thrown');
+      } catch (error: any) {
+        expect(error).toBeDefined();
+      }
     });
   });
 
   describe('Process Errors', () => {
     let processManager: ProcessManager;
+    const spawnedProcesses: Array<{ pid: number; process: any }> = [];
 
     beforeEach(() => {
       processManager = new ProcessManager(logger);
+    });
+
+    afterEach(async () => {
+      // Clean up all spawned processes and their pipes
+      for (const { pid, process } of spawnedProcesses) {
+        try {
+          // Close stdio pipes first
+          if (process.stdin && !process.stdin.destroyed) {
+            process.stdin.destroy();
+          }
+          if (process.stdout && !process.stdout.destroyed) {
+            process.stdout.destroy();
+          }
+          if (process.stderr && !process.stderr.destroyed) {
+            process.stderr.destroy();
+          }
+
+          // Then kill the process if still running
+          if (processManager.isRunning(pid)) {
+            await processManager.kill(pid);
+          }
+        } catch (e) {
+          // Ignore errors if process already exited
+        }
+      }
+      spawnedProcesses.length = 0; // Clear array
     });
 
     /**
@@ -160,6 +204,8 @@ describe('Error Propagation & Recovery (Integration)', () => {
     it('should handle CLI crash during execution', async () => {
       // Spawn process that crashes immediately
       const process = processManager.spawn('node', ['-e', 'process.exit(1)']);
+      const pid = process.pid!;
+      spawnedProcesses.push({ pid, process }); // Track for cleanup
 
       // Wait for process to exit with error
       const exitCode = await new Promise<number | null>((resolve) => {
@@ -168,7 +214,7 @@ describe('Error Propagation & Recovery (Integration)', () => {
 
       // Node returns 2 for syntax/execution errors in shell
       expect(exitCode).not.toBe(0);
-      expect(processManager.isRunning(process.pid!)).toBe(false);
+      expect(processManager.isRunning(pid)).toBe(false);
     });
 
     /**
@@ -178,6 +224,8 @@ describe('Error Propagation & Recovery (Integration)', () => {
      */
     it('should detect CLI non-zero exit code', async () => {
       const process = processManager.spawn('node', ['-e', 'process.exit(42)']);
+      const pid = process.pid!;
+      spawnedProcesses.push({ pid, process }); // Track for cleanup
 
       const exitCode = await new Promise<number | null>((resolve) => {
         process.on('exit', (code) => resolve(code));
@@ -186,7 +234,7 @@ describe('Error Propagation & Recovery (Integration)', () => {
       // Node returns 2 for syntax/execution errors in shell
       expect(exitCode).not.toBe(0);
       expect(exitCode).not.toBe(null);
-      expect(processManager.isRunning(process.pid!)).toBe(false);
+      expect(processManager.isRunning(pid)).toBe(false);
     });
 
     /**
@@ -198,6 +246,7 @@ describe('Error Propagation & Recovery (Integration)', () => {
       // Spawn process that hangs
       const process = processManager.spawn('sleep', ['100']);
       const pid = process.pid!;
+      spawnedProcesses.push({ pid, process }); // Track for cleanup
 
       expect(processManager.isRunning(pid)).toBe(true);
 
@@ -236,12 +285,22 @@ describe('Error Propagation & Recovery (Integration)', () => {
     });
 
     afterEach(async () => {
-      if (clientSocket) {
-        clientSocket.close();
+      // Clean up in proper order: client -> socket.io -> http server
+      if (clientSocket?.connected) {
+        clientSocket.disconnect();
+        await new Promise<void>((resolve) => {
+          clientSocket.once('disconnect', () => resolve());
+          // Timeout fallback to prevent hanging
+          setTimeout(() => resolve(), 100);
+        });
       }
+
       if (io) {
-        io.close();
+        await new Promise<void>((resolve) => {
+          io.close(() => resolve());
+        });
       }
+
       if (httpServer) {
         await new Promise<void>((resolve) => {
           httpServer.close(() => resolve());
@@ -336,13 +395,16 @@ describe('Error Propagation & Recovery (Integration)', () => {
 
       // Attempt to save message with UNIQUE invalid agent ID (will fail)
       const invalidAgentId = `invalid-agent-${Date.now()}-${Math.random().toString(36)}`;
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: invalidAgentId,
           type: 'assistant',
           content: 'Should fail',
-        })
-      ).rejects.toThrow();
+        });
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
 
       // Create another agent (should succeed despite previous error)
       const agent2 = Agent.create({
@@ -424,13 +486,16 @@ describe('Error Propagation & Recovery (Integration)', () => {
       const fakeAgentId = `fake-agent-recovery-${Date.now()}-${Math.random().toString(36)}`;
 
       // First attempt fails (invalid message - no agent)
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId: fakeAgentId,
           type: 'assistant',
           content: 'Should fail',
-        })
-      ).rejects.toThrow();
+        });
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
 
       // Second attempt with valid agent should succeed
       const agent1 = Agent.create({
@@ -494,21 +559,28 @@ describe('Error Propagation & Recovery (Integration)', () => {
       const agentId = `test-agent-recovery-${Date.now()}-${Math.random().toString(36)}`;
 
       // First operation fails (no agent exists)
-      await expect(
-        messageService.saveMessage({
+      try {
+        await messageService.saveMessage({
           agentId,
           type: 'assistant',
           role: 'test',
           content: 'Should fail',
-        })
-      ).rejects.toThrow();
+        });
+        fail('Expected FK constraint error but none was thrown');
+      } catch (error: any) {
+        expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+      }
 
       // Create agent
       const database = db.getDatabase();
-      database.prepare(`
+      database
+        .prepare(
+          `
         INSERT INTO agents (id, type, status, prompt, created_at)
         VALUES (?, ?, ?, ?, ?)
-      `).run(agentId, 'synthetic', 'running', 'test', new Date().toISOString());
+      `
+        )
+        .run(agentId, 'synthetic', 'running', 'test', new Date().toISOString());
 
       // Second operation succeeds (error state cleared)
       const message1 = await messageService.saveMessage({

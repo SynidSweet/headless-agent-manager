@@ -13,7 +13,7 @@ import { ClaudeMessageParser } from '@infrastructure/parsers/claude-message.pars
 interface ProxyAgentInfo {
   agent: Agent;
   observers: Set<IAgentObserver>;
-  pythonAgentId?: string;  // ID from Python service
+  pythonAgentId?: string; // ID from Python service
 }
 
 /**
@@ -211,6 +211,10 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
 
       if (session.configuration.workingDirectory) {
         requestBody.working_directory = session.configuration.workingDirectory;
+      }
+
+      if (session.configuration.model) {
+        requestBody.model = session.configuration.model;
       }
 
       // Call Python proxy stream endpoint

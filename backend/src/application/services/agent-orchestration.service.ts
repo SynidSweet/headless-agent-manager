@@ -12,6 +12,7 @@ import { IAgentLaunchQueue } from '@application/ports/agent-launch-queue.port';
 import { IInstructionHandler, ClaudeFileBackup } from '@application/ports/instruction-handler.port';
 import { LaunchAgentDto } from '@application/dto/launch-agent.dto';
 import { StreamingService } from './streaming.service';
+import { AgentMessageService } from './agent-message.service';
 
 /**
  * Agent Orchestration Service
@@ -35,6 +36,7 @@ export class AgentOrchestrationService {
     private readonly streamingService: StreamingService,
     @Inject('IAgentLaunchQueue') private readonly launchQueue: IAgentLaunchQueue,
     @Inject('IInstructionHandler') private readonly instructionHandler: IInstructionHandler,
+    private readonly messageService: AgentMessageService
   ) {}
 
   /**
@@ -95,9 +97,7 @@ export class AgentOrchestrationService {
           requestId: request.id,
           instructionsLength: request.instructions?.length,
         });
-        backup = await this.instructionHandler.prepareEnvironment(
-          request.instructions,
-        );
+        backup = await this.instructionHandler.prepareEnvironment(request.instructions);
       }
 
       // Step 2: Create agent entity with full configuration
@@ -115,6 +115,27 @@ export class AgentOrchestrationService {
         agentId: agent.id.toString(),
         status: agent.status,
       });
+
+      // Step 3.5: Save prompt as first message
+      // This ensures the user's prompt appears as the first message in the conversation
+      try {
+        await this.messageService.saveMessage({
+          agentId: agent.id.toString(),
+          type: 'user',
+          role: 'user',
+          content: agent.session.prompt,
+        });
+        this.logger.log('User prompt saved as first message', {
+          agentId: agent.id.toString(),
+        });
+      } catch (error) {
+        // Log error but don't fail the launch
+        // The agent can still function without the prompt message
+        this.logger.warn('Failed to save prompt as first message', {
+          agentId: agent.id.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
 
       // Step 4: Get appropriate runner from factory
       const runner = this.agentFactory.create(agent.type);
@@ -169,9 +190,7 @@ export class AgentOrchestrationService {
           this.logger.log('Environment restored after error');
         } catch (restoreError) {
           this.logger.error('Failed to restore environment after error', {
-            error: restoreError instanceof Error
-              ? restoreError.message
-              : String(restoreError),
+            error: restoreError instanceof Error ? restoreError.message : String(restoreError),
           });
         }
       }

@@ -75,9 +75,7 @@ describe('AgentMessageService', () => {
         get: jest.fn().mockReturnValue({ sequence_number: 2 }),
       };
 
-      mockDb.prepare
-        .mockReturnValueOnce(mockInsertStmt)
-        .mockReturnValueOnce(mockSelectStmt);
+      mockDb.prepare.mockReturnValueOnce(mockInsertStmt).mockReturnValueOnce(mockSelectStmt);
 
       // Act
       const result = await service.saveMessage(createDto);
@@ -111,9 +109,9 @@ describe('AgentMessageService', () => {
       };
 
       mockDb.prepare
-        .mockReturnValueOnce(mockInsertStmt)  // INSERT for agent A
+        .mockReturnValueOnce(mockInsertStmt) // INSERT for agent A
         .mockReturnValueOnce(mockSelectStmt1) // SELECT for agent A
-        .mockReturnValueOnce(mockInsertStmt)  // INSERT for agent B
+        .mockReturnValueOnce(mockInsertStmt) // INSERT for agent B
         .mockReturnValueOnce(mockSelectStmt2); // SELECT for agent B
 
       // Act
@@ -143,18 +141,16 @@ describe('AgentMessageService', () => {
         get: jest.fn().mockReturnValue({ sequence_number: 1 }),
       };
 
-      mockDb.prepare
-        .mockReturnValueOnce(mockInsertStmt)
-        .mockReturnValueOnce(mockSelectStmt);
+      mockDb.prepare.mockReturnValueOnce(mockInsertStmt).mockReturnValueOnce(mockSelectStmt);
 
       // Act
       const result = await service.saveMessage(createDto);
 
       // Assert
       expect(result.metadata).toEqual({ key: 'value', nested: { data: 123 } });
-      // Verify the INSERT call had metadata as JSON string (7th parameter, index 6)
+      // Verify the INSERT call had metadata as JSON string (8th parameter, index 7)
       const insertCall = mockInsertStmt.run.mock.calls[0];
-      const metadataParam = insertCall[6]; // metadata parameter
+      const metadataParam = insertCall[7]; // metadata parameter (index 7)
       expect(typeof metadataParam).toBe('string');
       expect(JSON.parse(metadataParam)).toEqual({ key: 'value', nested: { data: 123 } });
     });

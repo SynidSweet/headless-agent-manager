@@ -81,20 +81,37 @@ export {
 
 // Selectors
 export {
+  // Agent selectors
   selectAllAgents,
   selectAgentById,
   selectSelectedAgent,
   selectRunningAgents,
   selectCompletedAgents,
   selectFailedAgents,
-  selectMessagesForAgent,
-  selectMessagesForSelectedAgent,
+
+  // Message selectors (RECOMMENDED - use these for UI display)
+  selectAggregatedMessagesForAgent,
+  selectAggregatedMessagesForSelectedAgent,
+
+  // Deprecated aliases (backward compatibility)
+  selectMessagesForAgent, // @deprecated Use selectAggregatedMessagesForAgent
+  selectMessagesForSelectedAgent, // @deprecated Use selectAggregatedMessagesForSelectedAgent
+
+  // Raw selectors (ADVANCED - for debugging/custom aggregation only)
+  selectRawMessagesForAgent_UNSAFE,
+  selectRawMessagesForSelectedAgent_UNSAFE,
+
+  // Other message selectors
   selectLastSequenceForAgent,
+
+  // Connection selectors
   selectIsConnected,
   selectConnectionId,
   selectConnectionError,
   selectSubscribedAgents,
   selectReconnectAttempts,
+
+  // Combined selectors
   selectAgentWithMessages,
 } from './store/selectors';
 

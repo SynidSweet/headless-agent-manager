@@ -1,6 +1,16 @@
 import { Agent } from '@domain/entities/agent.entity';
 
 /**
+ * Session Configuration Response DTO
+ * Configuration information in session responses
+ */
+export interface SessionConfigurationResponseDto {
+  workingDirectory?: string;
+  conversationName?: string;
+  metadata?: Record<string, unknown>;
+}
+
+/**
  * Session Response DTO
  * Session information in API responses
  */
@@ -8,6 +18,7 @@ export interface SessionResponseDto {
   id: string;
   prompt: string;
   messageCount?: number;
+  configuration?: SessionConfigurationResponseDto;
 }
 
 /**
@@ -73,6 +84,11 @@ export class AgentResponseDto {
         id: agent.session.id || '',
         prompt: agent.session.prompt,
         messageCount: 0, // TODO: Track conversation history in domain
+        configuration: {
+          workingDirectory: agent.session.configuration.workingDirectory,
+          conversationName: agent.session.configuration.conversationName,
+          metadata: agent.session.configuration.metadata,
+        },
       };
     }
 

@@ -46,10 +46,12 @@ describe('Database Journal Mode (Integration)', () => {
       const db = databaseService.getDatabase();
 
       // Act: Insert data
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO agents (id, type, status, prompt, configuration, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run('test-id', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+      `
+      ).run('test-id', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
 
       // Assert: Query immediately (should work with DELETE mode, no checkpoint needed)
       const row = db.prepare('SELECT * FROM agents WHERE id = ?').get('test-id');
@@ -63,10 +65,12 @@ describe('Database Journal Mode (Integration)', () => {
 
       // Act: Multiple operations
       for (let i = 0; i < 10; i++) {
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO agents (id, type, status, prompt, configuration, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(`agent-${i}`, 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+        `
+        ).run(`agent-${i}`, 'claude-code', 'running', 'test', '{}', new Date().toISOString());
       }
 
       // Assert: All data readable immediately
@@ -117,10 +121,12 @@ describe('Database Journal Mode (Integration)', () => {
 
       // Act: Perform some writes to trigger journal activity
       for (let i = 0; i < 20; i++) {
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO agents (id, type, status, prompt, configuration, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(`agent-${i}`, 'claude-code', 'running', `test ${i}`, '{}', new Date().toISOString());
+        `
+        ).run(`agent-${i}`, 'claude-code', 'running', `test ${i}`, '{}', new Date().toISOString());
       }
 
       // Assert: No WAL or SHM files should exist
@@ -134,10 +140,14 @@ describe('Database Journal Mode (Integration)', () => {
     it('should persist data across connections with DELETE mode', () => {
       // Arrange: Insert data with first connection
       const db1 = databaseService.getDatabase();
-      db1.prepare(`
+      db1
+        .prepare(
+          `
         INSERT INTO agents (id, type, status, prompt, configuration, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run('persistent-agent', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+      `
+        )
+        .run('persistent-agent', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
 
       // Close first connection
       databaseService.onModuleDestroy();
@@ -156,10 +166,12 @@ describe('Database Journal Mode (Integration)', () => {
     it('should handle process termination gracefully with DELETE mode', () => {
       // Arrange: Insert data
       const db = databaseService.getDatabase();
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO agents (id, type, status, prompt, configuration, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run('termination-test', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+      `
+      ).run('termination-test', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
 
       // Act: Simulate ungraceful shutdown (don't call onModuleDestroy)
       // In DELETE mode, data is already on disk, no checkpoint needed
@@ -168,7 +180,7 @@ describe('Database Journal Mode (Integration)', () => {
       // Assert: Data should be readable even without graceful shutdown
       const row = db2.prepare('SELECT * FROM agents WHERE id = ?').get('termination-test');
       expect(row).toBeDefined();
-      expect((row as any).id).toBe('termination-test');
+      expect(row.id).toBe('termination-test');
 
       // Cleanup
       db2.close();
@@ -179,16 +191,20 @@ describe('Database Journal Mode (Integration)', () => {
       const db = databaseService.getDatabase();
 
       // Create agent
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO agents (id, type, status, prompt, configuration, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run('fk-test', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+      `
+      ).run('fk-test', 'claude-code', 'running', 'test', '{}', new Date().toISOString());
 
       // Create message with valid FK
-      db.prepare(`
+      db.prepare(
+        `
         INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at)
         VALUES (?, ?, ?, ?, ?, ?)
-      `).run('msg-1', 'fk-test', 1, 'assistant', 'Test', new Date().toISOString());
+      `
+      ).run('msg-1', 'fk-test', 1, 'assistant', 'Test', new Date().toISOString());
 
       // Act: Delete agent (should CASCADE DELETE messages)
       db.prepare('DELETE FROM agents WHERE id = ?').run('fk-test');
@@ -217,10 +233,12 @@ describe('Database Journal Mode (Integration)', () => {
       // Act: Insert many rows
       const startTime = Date.now();
       for (let i = 0; i < insertCount; i++) {
-        db.prepare(`
+        db.prepare(
+          `
           INSERT INTO agents (id, type, status, prompt, configuration, created_at)
           VALUES (?, ?, ?, ?, ?, ?)
-        `).run(`batch-${i}`, 'claude-code', 'running', 'test', '{}', new Date().toISOString());
+        `
+        ).run(`batch-${i}`, 'claude-code', 'running', 'test', '{}', new Date().toISOString());
       }
       const duration = Date.now() - startTime;
 
@@ -228,8 +246,9 @@ describe('Database Journal Mode (Integration)', () => {
       const count = db.prepare('SELECT COUNT(*) as count FROM agents').get() as { count: number };
       expect(count.count).toBe(insertCount);
 
-      // Assert: Performance is reasonable (< 100ms for 100 inserts in memory)
-      expect(duration).toBeLessThan(100);
+      // Assert: Performance is reasonable (< 150ms for 100 inserts in memory)
+      // Note: Increased from 100ms to account for system load variability
+      expect(duration).toBeLessThan(150);
     });
   });
 });

@@ -29,7 +29,7 @@ export class ApplicationLifecycleService {
     @Inject('IInstanceLockManager') private readonly lockManager: IInstanceLockManager,
     private readonly orchestration: AgentOrchestrationService,
     private readonly database: DatabaseService,
-    @Inject('ILogger') private readonly logger: Logger,
+    @Inject('ILogger') private readonly logger: Logger
   ) {}
 
   /**
@@ -154,11 +154,6 @@ export class ApplicationLifecycleService {
     const activeAgents = 0;
 
     // Create metadata from process state
-    return InstanceMetadata.fromProcess(
-      this.processState,
-      uptime,
-      databaseStatus,
-      activeAgents
-    );
+    return InstanceMetadata.fromProcess(this.processState, uptime, databaseStatus, activeAgents);
   }
 }

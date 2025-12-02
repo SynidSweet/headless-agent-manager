@@ -55,13 +55,11 @@ describe.skip('Message Flow Diagnostic (Integration) - MANUAL DIAGNOSTIC ONLY', 
     });
 
     // 3. Launch agent
-    const launchResp = await request(app.getHttpServer())
-      .post('/api/agents')
-      .send({
-        type: 'claude-code',
-        prompt: 'Say "DIAGNOSTIC_TEST" and nothing else. No tools.',
-        configuration: {},
-      });
+    const launchResp = await request(app.getHttpServer()).post('/api/agents').send({
+      type: 'claude-code',
+      prompt: 'Say "DIAGNOSTIC_TEST" and nothing else. No tools.',
+      configuration: {},
+    });
 
     const agentId = launchResp.body.agentId;
     console.log('✓ Agent launched:', agentId);
@@ -78,7 +76,7 @@ describe.skip('Message Flow Diagnostic (Integration) - MANUAL DIAGNOSTIC ONLY', 
 
     // 5. Wait for messages (or timeout)
     console.log('⏳ Waiting for messages...');
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    await new Promise((resolve) => setTimeout(resolve, 30000));
 
     // 6. Report findings
     console.log('\n═══════ DIAGNOSTIC RESULTS ═══════');
@@ -88,7 +86,9 @@ describe.skip('Message Flow Diagnostic (Integration) - MANUAL DIAGNOSTIC ONLY', 
     if (messages.length > 0) {
       console.log('✓ MESSAGES ARRIVING AT WEBSOCKET');
       messages.forEach((msg, i) => {
-        console.log(`  ${i + 1}. Type: ${msg.message?.type}, Content: ${msg.message?.content?.substring(0, 50)}`);
+        console.log(
+          `  ${i + 1}. Type: ${msg.message?.type}, Content: ${msg.message?.content?.substring(0, 50)}`
+        );
       });
     } else {
       console.log('❌ NO MESSAGES RECEIVED AT WEBSOCKET');

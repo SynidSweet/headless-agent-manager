@@ -27,10 +27,12 @@ describe('Message Persistence (Integration)', () => {
 
     // Create a test agent so FK constraint passes
     const db = databaseService.getDatabase();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run('test-agent-1', 'claude-code', 'running', 'Test prompt', new Date().toISOString());
+    `
+    ).run('test-agent-1', 'claude-code', 'running', 'Test prompt', new Date().toISOString());
   });
 
   afterEach(() => {
@@ -117,9 +119,13 @@ describe('Message Persistence (Integration)', () => {
 
       // Assert: Query database directly (bypassing service)
       const db = databaseService.getDatabase();
-      const directResult = db.prepare(`
+      const directResult = db
+        .prepare(
+          `
         SELECT * FROM agent_messages WHERE id = ?
-      `).get(savedMessage.id);
+      `
+        )
+        .get(savedMessage.id);
 
       // THIS TEST WILL FAIL if data isn't actually in the database!
       expect(directResult).toBeDefined();
@@ -146,9 +152,13 @@ describe('Message Persistence (Integration)', () => {
       freshDb.pragma('wal_checkpoint(FULL)');
 
       // Query with fresh connection
-      const messages = freshDb.prepare(`
+      const messages = freshDb
+        .prepare(
+          `
         SELECT * FROM agent_messages WHERE agent_id = ?
-      `).all('test-agent-1');
+      `
+        )
+        .all('test-agent-1');
 
       // THIS TEST WILL FAIL if transactions aren't committed!
       expect(messages).toHaveLength(1);

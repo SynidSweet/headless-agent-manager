@@ -57,17 +57,12 @@ describe.skip('Agent Launch → Message Persistence Integration (DEPRECATED - us
         SyntheticAgentAdapter,
         {
           provide: ClaudePythonProxyAdapter,
-          useFactory: () => new ClaudePythonProxyAdapter(
-            'http://localhost:8000',
-            new ConsoleLogger()
-          ),
+          useFactory: () =>
+            new ClaudePythonProxyAdapter('http://localhost:8000', new ConsoleLogger()),
         },
         {
           provide: ClaudeSDKAdapter,
-          useFactory: () => new ClaudeSDKAdapter(
-            'test-api-key',
-            new ConsoleLogger()
-          ),
+          useFactory: () => new ClaudeSDKAdapter('test-api-key', new ConsoleLogger()),
         },
 
         // Logger
@@ -119,7 +114,7 @@ describe.skip('Agent Launch → Message Persistence Integration (DEPRECATED - us
       const launchedAgent = await orchestrationService.launchAgent(dto);
 
       // Wait for messages to emit
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Assert: Agent returned by launch should exist in database
       const db = databaseService.getDatabase();
@@ -174,7 +169,7 @@ describe.skip('Agent Launch → Message Persistence Integration (DEPRECATED - us
       const agent = await orchestrationService.launchAgent(dto);
 
       // Wait for messages
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Assert: Messages persisted successfully
       const db = databaseService.getDatabase();
@@ -183,7 +178,7 @@ describe.skip('Agent Launch → Message Persistence Integration (DEPRECATED - us
         .all(agent.id.toString()) as any[];
 
       expect(messages.length).toBeGreaterThanOrEqual(2);
-      messages.forEach(msg => {
+      messages.forEach((msg) => {
         expect(msg.agent_id).toBe(agent.id.toString());
       });
     });

@@ -1,7 +1,4 @@
-import {
-  AgentResponseDto,
-  LaunchAgentResponseDto,
-} from '@application/dto/agent-response.dto';
+import { AgentResponseDto, LaunchAgentResponseDto } from '@application/dto/agent-response.dto';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
 
@@ -116,6 +113,114 @@ describe('AgentResponseDto', () => {
 
       // Assert
       expect(dto.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    it('should include workingDirectory in session configuration', () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {
+          workingDirectory: '/home/user/projects/my-app',
+        },
+      });
+
+      // Act
+      const dto = AgentResponseDto.fromAgent(agent);
+
+      // Assert
+      expect(dto.session?.configuration).toBeDefined();
+      expect(dto.session?.configuration?.workingDirectory).toBe('/home/user/projects/my-app');
+    });
+
+    it('should include conversationName in session configuration', () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {
+          conversationName: 'My Important Task',
+        },
+      });
+
+      // Act
+      const dto = AgentResponseDto.fromAgent(agent);
+
+      // Assert
+      expect(dto.session?.configuration).toBeDefined();
+      expect(dto.session?.configuration?.conversationName).toBe('My Important Task');
+    });
+
+    it('should include metadata in session configuration', () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {
+          metadata: {
+            machineId: 'machine-123',
+            projectId: 'proj-456',
+            customField: 'custom-value',
+          },
+        },
+      });
+
+      // Act
+      const dto = AgentResponseDto.fromAgent(agent);
+
+      // Assert
+      expect(dto.session?.configuration).toBeDefined();
+      expect(dto.session?.configuration?.metadata).toBeDefined();
+      expect(dto.session?.configuration?.metadata?.machineId).toBe('machine-123');
+      expect(dto.session?.configuration?.metadata?.projectId).toBe('proj-456');
+      expect(dto.session?.configuration?.metadata?.customField).toBe('custom-value');
+    });
+
+    it('should include all configuration fields when provided', () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {
+          workingDirectory: '/path/to/project',
+          conversationName: 'Complex Task',
+          metadata: {
+            projectId: 'proj-789',
+            environment: 'production',
+          },
+        },
+      });
+
+      // Act
+      const dto = AgentResponseDto.fromAgent(agent);
+
+      // Assert
+      expect(dto.session?.configuration).toBeDefined();
+      expect(dto.session?.configuration?.workingDirectory).toBe('/path/to/project');
+      expect(dto.session?.configuration?.conversationName).toBe('Complex Task');
+      expect(dto.session?.configuration?.metadata).toEqual({
+        projectId: 'proj-789',
+        environment: 'production',
+      });
+    });
+
+    it('should handle empty configuration', () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'Test prompt',
+        configuration: {},
+      });
+
+      // Act
+      const dto = AgentResponseDto.fromAgent(agent);
+
+      // Assert
+      expect(dto.session).toBeDefined();
+      expect(dto.session?.configuration).toBeDefined();
+      expect(dto.session?.configuration?.workingDirectory).toBeUndefined();
+      expect(dto.session?.configuration?.conversationName).toBeUndefined();
+      expect(dto.session?.configuration?.metadata).toBeUndefined();
     });
   });
 

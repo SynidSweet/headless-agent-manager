@@ -120,13 +120,14 @@ describe('Database Performance', () => {
       await repository.save(runningAgent);
 
       // Act - Get query plan
-      const queryPlan = db.getDatabase()
+      const queryPlan = db
+        .getDatabase()
         .prepare('EXPLAIN QUERY PLAN SELECT * FROM agents WHERE status = ?')
         .all('running') as any[];
 
       // Assert - Should use index
-      const usesIndex = queryPlan.some((row: any) =>
-        row.detail && row.detail.includes('idx_agents_status')
+      const usesIndex = queryPlan.some(
+        (row: any) => row.detail && row.detail.includes('idx_agents_status')
       );
       expect(usesIndex).toBe(true);
     });
@@ -233,30 +234,34 @@ describe('Database Performance', () => {
   describe('Index Usage Verification', () => {
     it('should use agent_id index for message lookups', () => {
       // Act - Get query plan
-      const queryPlan = db.getDatabase()
-        .prepare(
-          'EXPLAIN QUERY PLAN SELECT * FROM agent_messages WHERE agent_id = ?'
-        )
+      const queryPlan = db
+        .getDatabase()
+        .prepare('EXPLAIN QUERY PLAN SELECT * FROM agent_messages WHERE agent_id = ?')
         .all('test-id') as any[];
 
-      // Assert - Should use index
-      const usesIndex = queryPlan.some((row: any) =>
-        row.detail && row.detail.includes('idx_messages_agent_id')
+      // Assert - Should use either the single-column or composite index
+      // SQLite optimizer may choose idx_messages_sequence (composite) over idx_messages_agent_id
+      // because the composite index can also be used for agent_id-only queries
+      const usesIndex = queryPlan.some(
+        (row: any) => row.detail &&
+        (row.detail.includes('idx_messages_agent_id') ||
+         row.detail.includes('idx_messages_sequence'))
       );
       expect(usesIndex).toBe(true);
     });
 
     it('should use composite index for sequence ordering', () => {
       // Act - Get query plan
-      const queryPlan = db.getDatabase()
+      const queryPlan = db
+        .getDatabase()
         .prepare(
           'EXPLAIN QUERY PLAN SELECT * FROM agent_messages WHERE agent_id = ? ORDER BY sequence_number'
         )
         .all('test-id') as any[];
 
       // Assert - Should use composite index
-      const usesIndex = queryPlan.some((row: any) =>
-        row.detail && row.detail.includes('idx_messages_sequence')
+      const usesIndex = queryPlan.some(
+        (row: any) => row.detail && row.detail.includes('idx_messages_sequence')
       );
       expect(usesIndex).toBe(true);
     });

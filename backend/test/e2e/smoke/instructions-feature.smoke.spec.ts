@@ -2,11 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { AppModule } from '@/app.module';
-import {
-  checkPythonProxyHealth,
-  cleanupAllAgents,
-  getPythonProxyUrl,
-} from './helpers';
+import { checkPythonProxyHealth, cleanupAllAgents, getPythonProxyUrl } from './helpers';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -296,8 +292,9 @@ Do not use any tools. Just respond with that exact text.
     for (const response of responses) {
       const agentId = response.body.agentId;
 
-      const messagesResponse = await request(app.getHttpServer())
-        .get(`/api/agents/${agentId}/messages`);
+      const messagesResponse = await request(app.getHttpServer()).get(
+        `/api/agents/${agentId}/messages`
+      );
 
       if (messagesResponse.status === 200) {
         expect(messagesResponse.body.length).toBeGreaterThan(0);
@@ -350,8 +347,7 @@ Do not use any tools. Just respond with that exact text.
     await new Promise((resolve) => setTimeout(resolve, 15000));
 
     // Verify agent exists and processed
-    const statusResponse = await request(app.getHttpServer())
-      .get(`/api/agents/${agentId}/status`);
+    const statusResponse = await request(app.getHttpServer()).get(`/api/agents/${agentId}/status`);
 
     expect([200, 404]).toContain(statusResponse.status);
     console.log(`✅ Agent handled gracefully without user CLAUDE.md`);
@@ -404,9 +400,7 @@ Do not use any tools. Just respond with that exact text.
     }
 
     // Check initial queue
-    const initialQueue = await request(app.getHttpServer())
-      .get('/api/agents/queue')
-      .expect(200);
+    const initialQueue = await request(app.getHttpServer()).get('/api/agents/queue').expect(200);
 
     console.log(`Initial queue length: ${initialQueue.body.queueLength}`);
 
@@ -428,9 +422,7 @@ Do not use any tools. Just respond with that exact text.
     // Check queue shortly after launch (might still be processing)
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
-    const queueStatus = await request(app.getHttpServer())
-      .get('/api/agents/queue')
-      .expect(200);
+    const queueStatus = await request(app.getHttpServer()).get('/api/agents/queue').expect(200);
 
     console.log(`Queue length after launches: ${queueStatus.body.queueLength}`);
 

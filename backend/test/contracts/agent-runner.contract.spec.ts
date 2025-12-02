@@ -25,7 +25,10 @@
  */
 
 import { IAgentObserver, AgentMessage } from '@application/ports/agent-runner.port';
-import { SyntheticAgentAdapter, SyntheticAgentConfig } from '@infrastructure/adapters/synthetic-agent.adapter';
+import {
+  SyntheticAgentAdapter,
+  SyntheticAgentConfig,
+} from '@infrastructure/adapters/synthetic-agent.adapter';
 import { ClaudePythonProxyAdapter } from '@infrastructure/adapters/claude-python-proxy.adapter';
 import { ClaudeSDKAdapter } from '@infrastructure/adapters/claude-sdk.adapter';
 import { SqliteAgentRepository } from '@infrastructure/repositories/sqlite-agent.repository';
@@ -126,10 +129,7 @@ describe('IAgentRunner Contract', () => {
       setupSession: () => {
         const proxyUrl = process.env.CLAUDE_PROXY_URL || 'http://localhost:8000';
         const adapter = new ClaudePythonProxyAdapter(proxyUrl, new ConsoleLogger());
-        const session = Session.create(
-          'Say "Hello from contract test" and nothing else',
-          {}
-        );
+        const session = Session.create('Say "Hello from contract test" and nothing else', {});
         return { adapter, session };
       },
     },
@@ -149,10 +149,7 @@ describe('IAgentRunner Contract', () => {
       setupSession: () => {
         const apiKey = process.env.ANTHROPIC_API_KEY || '';
         const adapter = new ClaudeSDKAdapter(apiKey, new ConsoleLogger());
-        const session = Session.create(
-          'Say "Hello from contract test" and nothing else',
-          {}
-        );
+        const session = Session.create('Say "Hello from contract test" and nothing else', {});
         return { adapter, session };
       },
     },
@@ -349,10 +346,7 @@ describe('IAgentRunner Contract', () => {
       };
       adapter.configure(agentId, config);
 
-      const session = Session.create(
-        'Test',
-        { sessionId: agentId.toString() }
-      );
+      const session = Session.create('Test', { sessionId: agentId.toString() });
 
       const agent = await adapter.start(session);
 
@@ -382,10 +376,7 @@ describe('IAgentRunner Contract', () => {
       };
       adapter.configure(agentId, config);
 
-      const session = Session.create(
-        'Test',
-        { sessionId: agentId.toString() }
-      );
+      const session = Session.create('Test', { sessionId: agentId.toString() });
 
       const agent = await adapter.start(session);
 

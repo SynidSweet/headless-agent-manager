@@ -43,7 +43,10 @@ export class ClaudeSDKAdapter implements IAgentRunner {
   private client: Anthropic;
   private runningAgents = new Map<string, SDKAgentInfo>();
 
-  constructor(apiKey: string, private readonly logger: ILogger) {
+  constructor(
+    apiKey: string,
+    private readonly logger: ILogger
+  ) {
     this.client = new Anthropic({ apiKey });
     this.logger.info('ClaudeSDKAdapter initialized', { hasApiKey: !!apiKey });
   }

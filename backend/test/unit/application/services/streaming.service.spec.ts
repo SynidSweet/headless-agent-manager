@@ -235,8 +235,9 @@ describe('StreamingService', () => {
       mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
 
       // Act & Assert - Should throw error (not swallow it)
-      await expect(service.broadcastMessage(agentId, message))
-        .rejects.toThrow('does not exist (FK constraint violation)');
+      await expect(service.broadcastMessage(agentId, message)).rejects.toThrow(
+        'does not exist (FK constraint violation)'
+      );
 
       // Assert - Error event should be emitted to notify frontend
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
@@ -271,8 +272,9 @@ describe('StreamingService', () => {
       mockMessageService.saveMessage.mockRejectedValueOnce(dbError);
 
       // Act & Assert - Should throw error (fail-fast principle)
-      await expect(service.broadcastMessage(agentId, message))
-        .rejects.toThrow('Database write failed');
+      await expect(service.broadcastMessage(agentId, message)).rejects.toThrow(
+        'Database write failed'
+      );
 
       // Assert - NO message should be emitted (error occurred first)
       expect(mockWebSocketGateway.emitToRoom).not.toHaveBeenCalledWith(
@@ -306,13 +308,13 @@ describe('StreamingService', () => {
   });
 
   describe('broadcastError', () => {
-    it('should emit error to room', () => {
+    it('should emit error to room', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const error = new Error('Test error');
 
       // Act
-      service.broadcastError(agentId, error);
+      await service.broadcastError(agentId, error);
 
       // Assert
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
@@ -331,7 +333,7 @@ describe('StreamingService', () => {
   });
 
   describe('broadcastComplete', () => {
-    it('should emit completion event to room', () => {
+    it('should emit completion event to room', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const result: AgentResult = {
@@ -341,7 +343,7 @@ describe('StreamingService', () => {
       };
 
       // Act
-      service.broadcastComplete(agentId, result);
+      await service.broadcastComplete(agentId, result);
 
       // Assert
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
@@ -374,7 +376,7 @@ describe('StreamingService', () => {
       observer.onMessage(message);
 
       // Wait for async broadcast to complete
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
 
       // Assert
       expect(mockMessageService.saveMessage).toHaveBeenCalled();
@@ -411,7 +413,7 @@ describe('StreamingService', () => {
       );
     });
 
-    it('should broadcast error when observer receives error', () => {
+    it('should broadcast error when observer receives error', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const clientId = 'client-1';
@@ -422,6 +424,8 @@ describe('StreamingService', () => {
 
       // Act
       observer.onError(error);
+      // Wait for async broadcast to complete
+      await new Promise((resolve) => setImmediate(resolve));
 
       // Assert
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(
@@ -436,7 +440,7 @@ describe('StreamingService', () => {
       );
     });
 
-    it('should broadcast completion when observer receives complete', () => {
+    it('should broadcast completion when observer receives complete', async () => {
       // Arrange
       const agentId = AgentId.generate();
       const clientId = 'client-1';
@@ -451,6 +455,8 @@ describe('StreamingService', () => {
 
       // Act
       observer.onComplete(result);
+      // Wait for async broadcast to complete
+      await new Promise((resolve) => setImmediate(resolve));
 
       // Assert
       expect(mockWebSocketGateway.emitToRoom).toHaveBeenCalledWith(

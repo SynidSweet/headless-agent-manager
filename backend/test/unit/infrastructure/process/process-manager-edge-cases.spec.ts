@@ -20,6 +20,8 @@ import { ILogger } from '@application/ports/logger.port';
 describe('ProcessManager Edge Cases', () => {
   let processManager: ProcessManager;
   let mockLogger: jest.Mocked<ILogger>;
+  // Track all spawned processes for comprehensive cleanup
+  const spawnedProcesses: any[] = [];
 
   beforeEach(() => {
     mockLogger = {
@@ -30,6 +32,37 @@ describe('ProcessManager Edge Cases', () => {
     };
 
     processManager = new ProcessManager(mockLogger);
+    spawnedProcesses.length = 0; // Clear array
+  });
+
+  afterEach(async () => {
+    // Comprehensive cleanup: destroy stdio pipes and kill processes
+    for (const proc of spawnedProcesses) {
+      try {
+        // Destroy stdio pipes first to close PIPEWRAP handles
+        if (proc.stdin && !proc.stdin.destroyed) {
+          proc.stdin.destroy();
+        }
+        if (proc.stdout && !proc.stdout.destroyed) {
+          proc.stdout.destroy();
+        }
+        if (proc.stderr && !proc.stderr.destroyed) {
+          proc.stderr.destroy();
+        }
+
+        // Kill process if still running
+        if (proc.pid && !proc.killed) {
+          try {
+            process.kill(proc.pid, 'SIGKILL');
+          } catch (e) {
+            // Process already dead, ignore
+          }
+        }
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    spawnedProcesses.length = 0;
   });
 
   describe('Process Lifecycle Edge Cases', () => {
@@ -41,6 +74,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should handle process exit before kill() called', async () => {
       // Spawn process that exits quickly
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Wait for natural exit
@@ -61,6 +95,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should force kill process after SIGTERM timeout', async () => {
       // Spawn long-running process
       const process = processManager.spawn('sleep', ['100']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       expect(processManager.isRunning(pid)).toBe(true);
@@ -79,10 +114,8 @@ describe('ProcessManager Edge Cases', () => {
      */
     it('should detect and clean up zombie processes', async () => {
       // Spawn process that creates zombie
-      const process = processManager.spawn('node', [
-        '-e',
-        'process.exit(0)',
-      ]);
+      const process = processManager.spawn('node', ['-e', 'process.exit(0)']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Wait for exit
@@ -99,6 +132,7 @@ describe('ProcessManager Edge Cases', () => {
      */
     it('should clean up file descriptors on process exit', async () => {
       const process = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Get stdout reference
@@ -123,6 +157,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should handle long-running parent process', async () => {
       // Spawn long-running process
       const process = processManager.spawn('sleep', ['3']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Verify process is running
@@ -145,6 +180,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should handle stdout that closes before process exits', async () => {
       // Spawn process
       const process = processManager.spawn('sleep', ['0.5']);
+      spawnedProcesses.push(process);
 
       // Close stdout manually (simulate early closure)
       if (process.stdout) {
@@ -169,6 +205,7 @@ describe('ProcessManager Edge Cases', () => {
         '-e',
         'process.stderr.write(Buffer.from([0xff, 0xfe, 0xfd])); process.exit(0);',
       ]);
+      spawnedProcesses.push(process);
 
       // Wait for exit (should not crash)
       await new Promise((resolve) => process.on('exit', resolve));
@@ -184,6 +221,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should handle multiple output lines', async () => {
       // Generate simple output
       const process = processManager.spawn('echo', ['-e', 'line1\\nline2\\nline3']);
+      spawnedProcesses.push(process);
 
       // Wait for process to complete
       await new Promise((resolve) => process.on('exit', resolve));
@@ -199,6 +237,7 @@ describe('ProcessManager Edge Cases', () => {
      */
     it('should handle process that writes nothing', async () => {
       const process = processManager.spawn('sleep', ['0.1']);
+      spawnedProcesses.push(process);
 
       const reader = processManager.getStreamReader(process);
       const lines: string[] = [];
@@ -224,11 +263,11 @@ describe('ProcessManager Edge Cases', () => {
         processManager.spawn('echo', ['test2']),
         processManager.spawn('echo', ['test3']),
       ];
+      // Track all spawned processes
+      processes.forEach((p) => spawnedProcesses.push(p));
 
       // Wait for all to complete
-      await Promise.all(
-        processes.map((p) => new Promise((resolve) => p.on('exit', resolve)))
-      );
+      await Promise.all(processes.map((p) => new Promise((resolve) => p.on('exit', resolve))));
 
       // All should be cleaned up
       processes.forEach((p) => {
@@ -246,17 +285,27 @@ describe('ProcessManager Edge Cases', () => {
     it('should handle spawn failure without crashing', async () => {
       // Spawn non-existent command
       const process = processManager.spawn('nonexistent-command-xyz', []);
+      spawnedProcesses.push(process);
 
       // Wait for either error or exit
       await new Promise((resolve) => {
-        process.on('error', () => resolve(undefined));
-        process.on('exit', () => resolve(undefined));
-        setTimeout(() => resolve(undefined), 2000);
+        let resolved = false;
+        const resolveOnce = () => {
+          if (!resolved) {
+            resolved = true;
+            clearTimeout(timeoutHandle);
+            resolve(undefined);
+          }
+        };
+        const timeoutHandle = setTimeout(resolveOnce, 2000);
+        process.on('error', resolveOnce);
+        process.on('exit', resolveOnce);
       });
 
       // Process Manager should still be functional (didn't crash)
       // Can spawn another process successfully
       const validProcess = processManager.spawn('echo', ['test']);
+      spawnedProcesses.push(validProcess);
       await new Promise((resolve) => validProcess.on('exit', resolve));
 
       expect(processManager.isRunning(validProcess.pid!)).toBe(false);
@@ -270,6 +319,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should capture non-zero exit codes', async () => {
       // Spawn process with non-zero exit code
       const process = processManager.spawn('sh', ['-c', 'exit 5']);
+      spawnedProcesses.push(process);
 
       const exitCode = await new Promise<number | null>((resolve) => {
         process.on('exit', (code) => resolve(code));
@@ -291,6 +341,7 @@ describe('ProcessManager Edge Cases', () => {
       const process = processManager.spawn('echo', ['test'], {
         cwd: '/nonexistent/directory/xyz',
       });
+      spawnedProcesses.push(process);
 
       // Process should emit error
       const errorPromise = new Promise<Error>((resolve) => {
@@ -315,14 +366,14 @@ describe('ProcessManager Edge Cases', () => {
       for (let i = 0; i < count; i++) {
         processes.push(processManager.spawn('echo', [`test-${i}`]));
       }
+      // Track all spawned processes
+      processes.forEach((p) => spawnedProcesses.push(p));
 
       // All should be tracked
       expect(processes.length).toBe(count);
 
       // Wait for all to complete
-      await Promise.all(
-        processes.map((p) => new Promise((resolve) => p.on('exit', resolve)))
-      );
+      await Promise.all(processes.map((p) => new Promise((resolve) => p.on('exit', resolve))));
 
       // All should be cleaned up
       processes.forEach((p) => {
@@ -338,6 +389,7 @@ describe('ProcessManager Edge Cases', () => {
     it('should timeout if process hangs', async () => {
       // Spawn process that hangs
       const process = processManager.spawn('sleep', ['100']);
+      spawnedProcesses.push(process);
       const pid = process.pid!;
 
       // Kill with timeout

@@ -142,9 +142,13 @@ describe('Message Persistence E2E (Integration)', () => {
       // PHASE 7: Verify via Direct Database Query
       // ========================================
       const db = databaseService.getDatabase();
-      const dbMessages = db.prepare(`
+      const dbMessages = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?
-      `).get(agent.id.toString()) as { count: number };
+      `
+        )
+        .get(agent.id.toString()) as { count: number };
 
       expect(dbMessages.count).toBe(7);
     });
@@ -440,18 +444,26 @@ describe('Message Persistence E2E (Integration)', () => {
       const db = databaseService.getDatabase();
 
       // All messages should reference existing agent
-      const orphanedMessages = db.prepare(`
+      const orphanedMessages = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM agent_messages
         WHERE agent_id NOT IN (SELECT id FROM agents)
-      `).get() as { count: number };
+      `
+        )
+        .get() as { count: number };
 
       expect(orphanedMessages.count).toBe(0);
 
       // All messages should reference our specific agent
-      const agentMessages = db.prepare(`
+      const agentMessages = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM agent_messages
         WHERE agent_id = ?
-      `).get(agent.id.toString()) as { count: number };
+      `
+        )
+        .get(agent.id.toString()) as { count: number };
 
       expect(agentMessages.count).toBe(5);
     });
@@ -487,9 +499,13 @@ describe('Message Persistence E2E (Integration)', () => {
 
       // Verify via direct database query
       const db = databaseService.getDatabase();
-      const dbMessages = db.prepare(`
+      const dbMessages = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM agent_messages WHERE agent_id = ?
-      `).get(agent.id.toString()) as { count: number };
+      `
+        )
+        .get(agent.id.toString()) as { count: number };
 
       expect(dbMessages.count).toBe(0);
     });

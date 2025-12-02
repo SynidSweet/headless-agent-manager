@@ -35,11 +35,13 @@ import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { AgentType } from '@domain/value-objects/agent-type.vo';
 import { Server, Socket } from 'socket.io';
+import { ILogger } from '@application/ports/logger.port';
 
 describe('WebSocket API Contract', () => {
   let gateway: AgentGateway;
   let mockStreamingService: jest.Mocked<StreamingService>;
   let mockOrchestrationService: jest.Mocked<AgentOrchestrationService>;
+  let mockLogger: jest.Mocked<ILogger>;
   let db: DatabaseService;
   let repository: SqliteAgentRepository;
   let mockSocket: jest.Mocked<Socket>;
@@ -55,7 +57,15 @@ describe('WebSocket API Contract', () => {
     mockStreamingService = {} as any;
     mockOrchestrationService = {} as any;
 
-    gateway = new AgentGateway(mockStreamingService, mockOrchestrationService);
+    // Mock Logger
+    mockLogger = {
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    } as any;
+
+    gateway = new AgentGateway(mockStreamingService, mockOrchestrationService, mockLogger);
 
     // Mock socket.io infrastructure
     mockServer = {
@@ -139,7 +149,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
 
@@ -165,7 +175,7 @@ describe('WebSocket API Contract', () => {
       // Assert - ID in event matches database
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       const dbAgent = await repository.findById(AgentId.fromString(payload.agent.id));
 
       expect(dbAgent).toBeDefined();
@@ -222,7 +232,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
 
       expect(payload.message).toMatchObject({
         id: expect.stringMatching(UUID_REGEX),
@@ -253,7 +263,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
   });
@@ -289,7 +299,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.status).toMatch(/^(initializing|running|paused|completed|failed|terminated)$/);
     });
 
@@ -305,7 +315,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
   });
@@ -341,7 +351,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.status).toBeDefined();
     });
 
@@ -357,7 +367,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
   });
@@ -391,7 +401,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
 
@@ -458,7 +468,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.result).toMatchObject({
         status: expect.stringMatching(/^(success|failed)$/),
         duration: expect.any(Number),
@@ -482,7 +492,7 @@ describe('WebSocket API Contract', () => {
 
       const call = mockServer.emit.mock.calls[0];
       expect(call).toBeDefined();
-      const payload = call![1] as any;
+      const payload = call![1];
       expect(payload.timestamp).toMatch(ISO_8601_REGEX);
     });
   });

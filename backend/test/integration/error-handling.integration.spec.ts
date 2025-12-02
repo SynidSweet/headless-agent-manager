@@ -43,13 +43,7 @@ describe('Error Handling & Recovery Integration Tests', () => {
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      agentId,
-      'claude-code',
-      'running',
-      'test prompt',
-      new Date().toISOString()
-    );
+    stmt.run(agentId, 'claude-code', 'running', 'test prompt', new Date().toISOString());
   }
 
   /**
@@ -61,14 +55,18 @@ describe('Error Handling & Recovery Integration Tests', () => {
   it('should reject message for non-existent agent', async () => {
     const nonExistentAgentId = 'fake-agent-999';
 
-    await expect(
-      messageService.saveMessage({
+    try {
+      await messageService.saveMessage({
         agentId: nonExistentAgentId,
         type: 'assistant',
         role: 'test',
         content: 'This should fail',
-      })
-    ).rejects.toThrow(/FOREIGN KEY constraint failed/);
+      });
+      // If we reach here, test should fail
+      fail('Expected FK constraint error but none was thrown');
+    } catch (error: any) {
+      expect(error.message).toMatch(/FOREIGN KEY constraint failed/);
+    }
 
     // Database should remain consistent
     const allMessages = await messageService.findByAgentId(nonExistentAgentId);
@@ -208,12 +206,14 @@ describe('Error Handling & Recovery Integration Tests', () => {
         content: 'Valid 2',
       }),
       // Invalid message (will fail)
-      messageService.saveMessage({
-        agentId: 'fake-agent',
-        type: 'assistant',
-        role: 'test',
-        content: 'Invalid - bad agent',
-      }).catch(() => null),
+      messageService
+        .saveMessage({
+          agentId: 'fake-agent',
+          type: 'assistant',
+          role: 'test',
+          content: 'Invalid - bad agent',
+        })
+        .catch(() => null),
       // More valid messages
       messageService.saveMessage({
         agentId,

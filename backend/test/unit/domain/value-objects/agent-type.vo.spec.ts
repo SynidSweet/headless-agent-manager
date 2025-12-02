@@ -34,11 +34,7 @@ describe('AgentType Value Object', () => {
     });
 
     it('should support all agent types', () => {
-      const types: AgentType[] = [
-        AgentType.CLAUDE_CODE,
-        AgentType.GEMINI_CLI,
-        AgentType.SYNTHETIC,
-      ];
+      const types: AgentType[] = [AgentType.CLAUDE_CODE, AgentType.GEMINI_CLI, AgentType.SYNTHETIC];
 
       expect(types).toHaveLength(3);
     });

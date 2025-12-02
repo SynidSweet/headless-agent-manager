@@ -215,6 +215,12 @@ export class ClaudeCodeAdapter implements IAgentRunner {
           // Parse message
           const message = this.messageParser.parse(line);
 
+          // Skip if message couldn't be parsed
+          if (!message) {
+            this.logger.debug('Skipping unparseable line', { agentId: id });
+            continue;
+          }
+
           this.logger.debug('Agent message parsed and notifying observers', {
             agentId: id,
             type: message.type,
@@ -298,11 +304,7 @@ export class ClaudeCodeAdapter implements IAgentRunner {
   /**
    * Notify all observers
    */
-  private notifyObservers(
-    agentId: AgentId,
-    method: keyof IAgentObserver,
-    data: any
-  ): void {
+  private notifyObservers(agentId: AgentId, method: keyof IAgentObserver, data: any): void {
     const id = agentId.toString();
     const agentInfo = this.runningAgents.get(id);
 

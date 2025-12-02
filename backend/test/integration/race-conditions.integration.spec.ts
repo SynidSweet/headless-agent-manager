@@ -36,13 +36,7 @@ describe('Race Condition Integration Tests', () => {
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
     `);
-    stmt.run(
-      agentId,
-      'claude-code',
-      'running',
-      'test prompt',
-      new Date().toISOString()
-    );
+    stmt.run(agentId, 'claude-code', 'running', 'test prompt', new Date().toISOString());
   }
 
   /**

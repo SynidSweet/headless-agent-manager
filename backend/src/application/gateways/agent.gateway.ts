@@ -13,6 +13,7 @@ import { StreamingService } from '../services/streaming.service';
 import { AgentOrchestrationService } from '../services/agent-orchestration.service';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { IWebSocketGateway, WebSocketClient } from '../ports/websocket-gateway.port';
+import { ILogger } from '../ports/logger.port';
 
 /**
  * Agent WebSocket Gateway
@@ -26,9 +27,7 @@ import { IWebSocketGateway, WebSocketClient } from '../ports/websocket-gateway.p
   },
 })
 @Injectable()
-export class AgentGateway
-  implements OnGatewayConnection, OnGatewayDisconnect, IWebSocketGateway
-{
+export class AgentGateway implements OnGatewayConnection, OnGatewayDisconnect, IWebSocketGateway {
   @WebSocketServer()
   server!: Server;
 
@@ -37,7 +36,8 @@ export class AgentGateway
   constructor(
     @Inject(forwardRef(() => StreamingService))
     private readonly streamingService: StreamingService,
-    private readonly orchestrationService: AgentOrchestrationService
+    private readonly orchestrationService: AgentOrchestrationService,
+    @Inject('ILogger') private readonly logger: ILogger
   ) {}
 
   /**
@@ -51,8 +51,10 @@ export class AgentGateway
 
     this.connectedClients.set(client.id, clientInfo);
 
-    console.log(`WebSocket client connected: ${client.id}`);
-    console.log(`Total connected clients: ${this.connectedClients.size}`);
+    this.logger.info('WebSocket client connected', {
+      clientId: client.id,
+      totalClients: this.connectedClients.size,
+    });
 
     // Send connection confirmation
     client.emit('connected', {
@@ -65,7 +67,9 @@ export class AgentGateway
    * Handle WebSocket disconnection
    */
   handleDisconnect(client: Socket): void {
-    console.log(`WebSocket client disconnected: ${client.id}`);
+    this.logger.info('WebSocket client disconnected', {
+      clientId: client.id,
+    });
 
     // Unsubscribe from all agents
     this.streamingService.unsubscribeClient(client.id);
@@ -73,7 +77,10 @@ export class AgentGateway
     // Remove from connected clients
     this.connectedClients.delete(client.id);
 
-    console.log(`Total connected clients: ${this.connectedClients.size}`);
+    this.logger.info('Client disconnected', {
+      clientId: client.id,
+      totalClients: this.connectedClients.size,
+    });
   }
 
   /**
@@ -99,7 +106,10 @@ export class AgentGateway
         timestamp: new Date().toISOString(),
       });
 
-      console.log(`Client ${client.id} subscribed to agent ${data.agentId}`);
+      this.logger.info('Client subscribed to agent', {
+        clientId: client.id,
+        agentId: data.agentId,
+      });
     } catch (error) {
       client.emit('error', {
         event: 'subscribe',
@@ -126,7 +136,10 @@ export class AgentGateway
         timestamp: new Date().toISOString(),
       });
 
-      console.log(`Client ${client.id} unsubscribed from agent ${data.agentId}`);
+      this.logger.info('Client unsubscribed from agent', {
+        clientId: client.id,
+        agentId: data.agentId,
+      });
     } catch (error) {
       client.emit('error', {
         event: 'unsubscribe',
@@ -165,7 +178,7 @@ export class AgentGateway
   joinRoom(clientId: string, room: string): void {
     const socket = this.server.sockets.sockets.get(clientId);
     if (socket) {
-      socket.join(room);
+      void socket.join(room);
     }
   }
 
@@ -175,7 +188,7 @@ export class AgentGateway
   leaveRoom(clientId: string, room: string): void {
     const socket = this.server.sockets.sockets.get(clientId);
     if (socket) {
-      socket.leave(room);
+      void socket.leave(room);
     }
   }
 

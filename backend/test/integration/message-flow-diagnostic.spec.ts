@@ -7,13 +7,12 @@ import { join } from 'path';
 /**
  * Diagnostic Test: Message Flow Analysis
  *
- * This test reproduces the production WAL persistence issue.
- * Tests use REAL file-based database with WAL mode (not :memory:).
+ * This test verifies message persistence with DELETE journal mode.
+ * Tests use REAL file-based database with DELETE mode (not :memory:).
  *
- * EXPECTED FAILURE: Messages insert successfully but cannot be retrieved
- * after WAL checkpoint, indicating data stuck in WAL file.
+ * DELETE mode ensures immediate data persistence without WAL files.
  */
-describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
+describe('Message Flow Diagnostic (File-based DB with DELETE mode)', () => {
   let messageService: AgentMessageService;
   let databaseService: DatabaseService;
   const testDbPath = join(__dirname, '../../data/test-diagnostic.db');
@@ -37,10 +36,12 @@ describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
 
     // Create a test agent so FK constraint passes
     const db = databaseService.getDatabase();
-    db.prepare(`
+    db.prepare(
+      `
       INSERT INTO agents (id, type, status, prompt, created_at)
       VALUES (?, ?, ?, ?, ?)
-    `).run('test-agent-1', 'claude-code', 'running', 'Test prompt', new Date().toISOString());
+    `
+    ).run('test-agent-1', 'claude-code', 'running', 'Test prompt', new Date().toISOString());
   });
 
   afterEach(() => {
@@ -56,8 +57,8 @@ describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
     }
   });
 
-  describe('WAL Persistence Diagnostic', () => {
-    it('should save and retrieve messages from file-based database with WAL', async () => {
+  describe('DELETE Mode Persistence Diagnostic', () => {
+    it('should save and retrieve messages from file-based database with DELETE mode', async () => {
       // Arrange
       const message: CreateMessageDto = {
         agentId: 'test-agent-1',
@@ -83,15 +84,16 @@ describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
       const serviceMessages = await messageService.findByAgentId('test-agent-1');
       console.log('Service query result:', serviceMessages.length, 'messages');
 
-      // Act 4: Force WAL checkpoint
-      console.log('\n=== STEP 4: Force WAL checkpoint ===');
-      const checkpointResult = db.pragma('wal_checkpoint(FULL)', { simple: false });
-      console.log('WAL checkpoint result:', checkpointResult);
+      // Act 4: Verify journal mode
+      console.log('\n=== STEP 4: Verify journal mode ===');
+      const journalMode = db.pragma('journal_mode', { simple: true }) as string;
+      console.log('Journal mode:', journalMode);
+      expect(['delete', 'memory']).toContain(journalMode.toLowerCase());
 
-      // Act 5: Query AFTER checkpoint (this is where production fails!)
-      console.log('\n=== STEP 5: Query after WAL checkpoint ===');
+      // Act 5: Query again (DELETE mode has immediate persistence)
+      console.log('\n=== STEP 5: Query again (immediate persistence) ===');
       const rows2 = directQuery1.all('test-agent-1');
-      console.log('Direct query result (after checkpoint):', rows2.length, 'rows');
+      console.log('Direct query result (immediate persistence):', rows2.length, 'rows');
 
       // Act 6: Create NEW database connection to same file
       console.log('\n=== STEP 6: Fresh database connection ===');
@@ -103,15 +105,15 @@ describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
       console.log('Fresh connection result:', rows3.length, 'rows');
       freshDb.close();
 
-      // Assert: All queries should return the same data
+      // Assert: All queries should return the same data (DELETE mode ensures immediate persistence)
       console.log('\n=== ASSERTION ===');
       expect(rows1.length).toBeGreaterThan(0);
       expect(serviceMessages.length).toBe(rows1.length);
-      expect(rows2.length).toBe(rows1.length); // THIS MAY FAIL in production scenario
-      expect(rows3.length).toBe(rows1.length); // THIS MAY FAIL if WAL not checkpointed
+      expect(rows2.length).toBe(rows1.length); // DELETE mode: immediate persistence
+      expect(rows3.length).toBe(rows1.length); // DELETE mode: data in main file
     });
 
-    it('should handle multiple messages with WAL mode', async () => {
+    it('should handle multiple messages with DELETE mode', async () => {
       // Arrange: Create 3 messages
       const messages: CreateMessageDto[] = [
         { agentId: 'test-agent-1', type: 'user', content: 'Message 1' },
@@ -126,51 +128,52 @@ describe('Message Flow Diagnostic (File-based DB with WAL)', () => {
         console.log('Saved:', saved.id, saved.sequenceNumber);
       }
 
-      // Query immediately
+      // Query immediately (DELETE mode ensures immediate persistence)
       const db = databaseService.getDatabase();
-      const countBefore = db.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as { c: number };
-      console.log('Count before checkpoint:', countBefore.c);
+      const count = db.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as {
+        c: number;
+      };
+      console.log('Message count:', count.c);
 
-      // Force checkpoint
-      db.pragma('wal_checkpoint(FULL)');
+      // Verify journal mode
+      const journalMode = db.pragma('journal_mode', { simple: true }) as string;
+      console.log('Journal mode:', journalMode);
+      expect(['delete', 'memory']).toContain(journalMode.toLowerCase());
 
-      // Query after checkpoint
-      const countAfter = db.prepare('SELECT COUNT(*) as c FROM agent_messages').get() as { c: number };
-      console.log('Count after checkpoint:', countAfter.c);
-
-      // Verify
-      expect(countBefore.c).toBe(3);
-      expect(countAfter.c).toBe(3); // THIS MAY FAIL if WAL issue exists
+      // Verify all messages persisted
+      expect(count.c).toBe(3); // DELETE mode: immediate persistence
     });
 
-    it('should verify WAL file contains data', async () => {
+    it('should verify DELETE mode does not create WAL files', async () => {
       // Arrange
       const message: CreateMessageDto = {
         agentId: 'test-agent-1',
         type: 'assistant',
-        content: 'WAL test message',
+        content: 'DELETE mode test message',
       };
 
       // Act: Save message
       await messageService.saveMessage(message);
 
-      // Check file sizes
+      // Check file existence
       const fs = require('fs');
       const mainSize = fs.statSync(testDbPath).size;
       const walPath = `${testDbPath}-wal`;
-      let walSize = 0;
-      try {
-        walSize = fs.statSync(walPath).size;
-      } catch {
-        // WAL file might not exist yet
-      }
+      const shmPath = `${testDbPath}-shm`;
+      const walExists = fs.existsSync(walPath);
+      const shmExists = fs.existsSync(shmPath);
 
-      console.log('\n=== File sizes ===');
+      console.log('\n=== File status ===');
       console.log('Main DB:', mainSize, 'bytes');
-      console.log('WAL file:', walSize, 'bytes');
+      console.log('WAL file exists:', walExists);
+      console.log('SHM file exists:', shmExists);
 
-      // WAL file should exist and have data
-      expect(walSize).toBeGreaterThan(0);
+      // DELETE mode should NOT create WAL or SHM files
+      expect(walExists).toBe(false);
+      expect(shmExists).toBe(false);
+
+      // Main database file should contain data
+      expect(mainSize).toBeGreaterThan(0);
     });
   });
 

@@ -7,6 +7,10 @@ import {
   selectCompletedAgents,
   selectMessagesForAgent,
   selectMessagesForSelectedAgent,
+  selectAggregatedMessagesForAgent,
+  selectAggregatedMessagesForSelectedAgent,
+  selectRawMessagesForAgent_UNSAFE,
+  selectRawMessagesForSelectedAgent_UNSAFE,
   selectIsConnected,
   selectSubscribedAgents,
 } from '../../src/store/selectors';
@@ -390,6 +394,248 @@ describe('selectors', () => {
       const subscribed = selectSubscribedAgents(state);
 
       expect(subscribed).toEqual(['agent-1', 'agent-2']);
+    });
+  });
+
+  describe('selectRawMessagesForAgent_UNSAFE', () => {
+    it('should return raw messages WITHOUT aggregation', () => {
+      const state = createTestState();
+
+      // Add streaming tokens for agent-3
+      state.messages.byAgentId['agent-3'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Hello',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-2',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: ' world',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'complete-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Hello world',
+            sequenceNumber: 3,
+            createdAt: '2025-11-10T10:15:02Z',
+            // No metadata.eventType = complete message
+          }
+        ],
+        lastSequence: 3,
+        loading: false,
+        error: null,
+      };
+
+      const rawMessages = selectRawMessagesForAgent_UNSAFE(state, 'agent-3');
+
+      // Should return ALL 3 messages (tokens + complete) WITHOUT aggregation
+      expect(rawMessages).toHaveLength(3);
+      expect(rawMessages[0].content).toBe('Hello');
+      expect(rawMessages[1].content).toBe(' world');
+      expect(rawMessages[2].content).toBe('Hello world');
+
+      // No aggregation metadata should be present
+      expect(rawMessages[0].metadata?.aggregated).toBeUndefined();
+      expect(rawMessages[1].metadata?.aggregated).toBeUndefined();
+      expect(rawMessages[2].metadata?.aggregated).toBeUndefined();
+    });
+
+    it('should return different result than aggregated selector', () => {
+      const state = createTestState();
+
+      // Add streaming tokens for agent-3
+      state.messages.byAgentId['agent-3'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Hello',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-2',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: ' world',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'complete-1',
+            agentId: 'agent-3',
+            type: 'assistant' as const,
+            content: 'Hello world',
+            sequenceNumber: 3,
+            createdAt: '2025-11-10T10:15:02Z',
+          }
+        ],
+        lastSequence: 3,
+        loading: false,
+        error: null,
+      };
+
+      const rawMessages = selectRawMessagesForAgent_UNSAFE(state, 'agent-3');
+      const aggregatedMessages = selectAggregatedMessagesForAgent(state, 'agent-3');
+
+      // Raw should have 3 messages (tokens + complete)
+      expect(rawMessages).toHaveLength(3);
+
+      // Aggregated should have 1 message (tokens aggregated, duplicate removed)
+      expect(aggregatedMessages).toHaveLength(1);
+      expect(aggregatedMessages[0].content).toBe('Hello world');
+      expect(aggregatedMessages[0].metadata?.aggregated).toBe(true);
+    });
+
+    it('should return empty array for non-existent agent', () => {
+      const state = createTestState();
+      const messages = selectRawMessagesForAgent_UNSAFE(state, 'fake-id');
+
+      expect(messages).toEqual([]);
+    });
+
+    it('should return raw messages for agent with no streaming', () => {
+      const state = createTestState();
+
+      // Regular messages (no streaming)
+      const rawMessages = selectRawMessagesForAgent_UNSAFE(state, 'agent-1');
+
+      // Should return messages unchanged
+      expect(rawMessages).toHaveLength(2);
+      expect(rawMessages[0].content).toBe('Hello');
+      expect(rawMessages[1].content).toBe('Hi!');
+    });
+  });
+
+  describe('selectRawMessagesForSelectedAgent_UNSAFE', () => {
+    it('should return raw messages for selected agent', () => {
+      const state = createTestState();
+
+      // Add streaming tokens for agent-1 (which is selected)
+      state.messages.byAgentId['agent-1'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-1',
+            type: 'assistant' as const,
+            content: 'Test',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'complete-1',
+            agentId: 'agent-1',
+            type: 'assistant' as const,
+            content: 'Test',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+          }
+        ],
+        lastSequence: 2,
+        loading: false,
+        error: null,
+      };
+
+      const rawMessages = selectRawMessagesForSelectedAgent_UNSAFE(state);
+
+      // Should return both messages without aggregation
+      expect(rawMessages).toHaveLength(2);
+      expect(rawMessages[0].content).toBe('Test');
+      expect(rawMessages[1].content).toBe('Test');
+    });
+
+    it('should return empty array when no agent selected', () => {
+      const state = createTestState();
+      state.agents.selectedAgentId = null;
+
+      const messages = selectRawMessagesForSelectedAgent_UNSAFE(state);
+
+      expect(messages).toEqual([]);
+    });
+
+    it('should return different result than aggregated selector', () => {
+      const state = createTestState();
+
+      // Add streaming tokens for agent-1 (selected)
+      state.messages.byAgentId['agent-1'] = {
+        messages: [
+          {
+            id: 'token-1',
+            agentId: 'agent-1',
+            type: 'assistant' as const,
+            content: 'A',
+            sequenceNumber: 1,
+            createdAt: '2025-11-10T10:15:00Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'token-2',
+            agentId: 'agent-1',
+            type: 'assistant' as const,
+            content: 'B',
+            sequenceNumber: 2,
+            createdAt: '2025-11-10T10:15:01Z',
+            metadata: { eventType: 'content_delta' }
+          },
+          {
+            id: 'complete-1',
+            agentId: 'agent-1',
+            type: 'assistant' as const,
+            content: 'AB',
+            sequenceNumber: 3,
+            createdAt: '2025-11-10T10:15:02Z',
+          }
+        ],
+        lastSequence: 3,
+        loading: false,
+        error: null,
+      };
+
+      const rawMessages = selectRawMessagesForSelectedAgent_UNSAFE(state);
+      const aggregatedMessages = selectAggregatedMessagesForSelectedAgent(state);
+
+      // Raw should have 3 messages
+      expect(rawMessages).toHaveLength(3);
+
+      // Aggregated should have 1 message
+      expect(aggregatedMessages).toHaveLength(1);
+      expect(aggregatedMessages[0].content).toBe('AB');
+    });
+  });
+
+  describe('Backward compatibility', () => {
+    it('should maintain old selector names as aliases', () => {
+      const state = createTestState();
+
+      // Old names should work exactly like new names
+      const oldMessages = selectMessagesForAgent(state, 'agent-1');
+      const newMessages = selectAggregatedMessagesForAgent(state, 'agent-1');
+
+      expect(oldMessages).toEqual(newMessages);
+    });
+
+    it('should maintain old selected agent selector as alias', () => {
+      const state = createTestState();
+
+      const oldMessages = selectMessagesForSelectedAgent(state);
+      const newMessages = selectAggregatedMessagesForSelectedAgent(state);
+
+      expect(oldMessages).toEqual(newMessages);
     });
   });
 });

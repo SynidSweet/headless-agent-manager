@@ -30,21 +30,11 @@
         - heading "Active Agents (0)" [level=3] [ref=e28]
         - paragraph [ref=e29]: No active agents
       - generic [ref=e30]:
-        - heading "Historic Agents (6)" [level=3] [ref=e31]
-        - button "What subfolders can you see?" [ref=e32]:
-          - paragraph [ref=e35]: What subfolders can you see?
-        - button "yo" [ref=e36]:
-          - paragraph [ref=e39]: yo
-        - button "hey! What sub folders can you ..." [ref=e40]:
-          - paragraph [ref=e43]: hey! What sub folders can you ...
-        - button "hey" [ref=e44]:
-          - paragraph [ref=e47]: hey
-        - button "yo" [ref=e48]:
-          - paragraph [ref=e51]: yo
-        - button "Test error event" [ref=e52]:
-          - paragraph [ref=e55]: Test error event
-  - main [ref=e56]:
-    - generic [ref=e58]:
-      - generic [ref=e59]: terminal
-      - paragraph [ref=e60]: Select an agent or start a new one
+        - heading "Historic Agents (1)" [level=3] [ref=e31]
+        - button "Respond with exactly \"DEDUP_TE..." [ref=e32]:
+          - paragraph [ref=e35]: Respond with exactly "DEDUP_TE...
+  - main [ref=e36]:
+    - generic [ref=e38]:
+      - generic [ref=e39]: terminal
+      - paragraph [ref=e40]: Select an agent or start a new one
 ```
