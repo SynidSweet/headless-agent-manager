@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, HttpCode, HttpStatus, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Body, HttpCode, HttpStatus, Logger, Inject } from '@nestjs/common';
 import { DatabaseService } from '@infrastructure/database/database.service';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import {
@@ -9,6 +9,8 @@ import { StreamingService } from '@application/services/streaming.service';
 import { AgentGateway } from '@application/gateways/agent.gateway';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
 import { Session } from '@domain/value-objects/session.vo';
+import { IAgentRepository } from '@application/ports/agent-repository.port';
+import { AgentResponseDto } from '@application/dto';
 
 /**
  * Test Controller
@@ -25,23 +27,56 @@ export class TestController {
     private readonly orchestrationService: AgentOrchestrationService,
     private readonly syntheticAdapter: SyntheticAgentAdapter,
     private readonly streamingService: StreamingService,
-    private readonly gateway: AgentGateway
+    private readonly gateway: AgentGateway,
+    @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository
   ) {}
 
   /**
    * Reset database (clear all data)
    * POST /test/reset-database
    * WARNING: Only use in testing!
+   *
+   * Complete cleanup procedure:
+   * 1. Get count before deletion
+   * 2. Clean up subscriptions and rooms for each agent
+   * 3. Truncate all tables
+   * 4. Verify deletion succeeded
+   *
+   * @returns Object with success status and deleted count
+   * @throws Error if deletion verification fails
    */
   @Post('reset-database')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async resetDatabase(): Promise<void> {
-    const database = this.db.getDatabase();
+  @HttpCode(HttpStatus.OK)
+  async resetDatabase(): Promise<{ success: boolean; deletedCount: number }> {
+    // 1. Get count before deletion
+    const beforeCount = this.db.countTable('agents');
+    this.logger.log(`[TestController] Resetting database (${beforeCount} agents to delete)`);
 
-    // Delete all data (CASCADE will handle messages)
-    database.prepare('DELETE FROM agents').run();
+    // 2. Get all agents for cleanup
+    const agents = await this.agentRepository.findAll();
 
-    console.log('[TestController] Database reset - all agents deleted');
+    // 3. Clean up subscriptions and rooms for each agent
+    for (const agent of agents) {
+      this.streamingService.unsubscribeAllForAgent(agent.id);
+      await this.gateway.cleanupAgentRooms(agent.id);
+    }
+
+    // 4. Truncate all tables (faster than DELETE, ensures clean state)
+    this.db.truncateTable('agent_messages'); // Delete messages first (FK constraint)
+    this.db.truncateTable('agents');
+
+    // 5. Verify deletion succeeded
+    const afterCount = this.db.countTable('agents');
+    if (afterCount !== 0) {
+      throw new Error(`Reset failed: ${afterCount} agents remain`);
+    }
+
+    this.logger.log(`[TestController] Database reset complete - ${beforeCount} agents deleted`);
+
+    return {
+      success: true,
+      deletedCount: beforeCount,
+    };
   }
 
   /**
@@ -69,6 +104,70 @@ export class TestController {
       inTransaction: database.inTransaction,
       messages,
       walCheckpoint: 'FULL',
+    };
+  }
+
+  /**
+   * Get cleanup status
+   * GET /test/cleanup-status
+   *
+   * Returns whether the system is in a clean state (no agents).
+   * Useful for E2E tests to verify cleanup completed successfully.
+   */
+  @Get('cleanup-status')
+  async getCleanupStatus(): Promise<{
+    isClean: boolean;
+    agentCount: number;
+  }> {
+    const agents = await this.agentRepository.findAll();
+
+    return {
+      isClean: agents.length === 0,
+      agentCount: agents.length,
+    };
+  }
+
+  /**
+   * Verify clean state (comprehensive check)
+   * GET /test/verify-clean-state
+   *
+   * Returns detailed information about database state including:
+   * - Whether the system is clean (no agents, no messages)
+   * - List of specific issues if not clean
+   * - Agent count
+   * - Message count
+   *
+   * This is more comprehensive than cleanup-status and includes
+   * actionable information for debugging test isolation issues.
+   */
+  @Get('verify-clean-state')
+  async verifyCleanState(): Promise<{
+    isClean: boolean;
+    issues: string[];
+    agentCount: number;
+    messageCount: number;
+  }> {
+    const agents = await this.agentRepository.findAll();
+    const messageCount = this.db.countTable('agent_messages');
+
+    const issues: string[] = [];
+
+    if (agents.length > 0) {
+      const agentList = agents
+        .map((a) => `${a.id.toString()} [${a.status.toString()}]`)
+        .join(', ');
+      issues.push(`${agents.length} agents exist: ${agentList}`);
+    }
+
+    if (messageCount > 0) {
+      issues.push(`${messageCount} messages exist`);
+    }
+
+    return {
+      isClean: issues.length === 0,
+      issues,
+      agentCount: agents.length,
+      messageCount,
     };
   }
 
@@ -158,31 +257,12 @@ export class TestController {
     );
 
     // EVENT-DRIVEN: Emit agent:created event to all WebSocket clients
-    this.logger.log(`[DEBUG] About to emit agent:created for ${agent.id.toString()}`);
-    this.logger.log(`[DEBUG] Gateway available: ${!!this.gateway}`);
-
-    try {
-      this.gateway.emitToAll('agent:created', {
-        agent: {
-          id: agent.id.toString(),
-          type: 'synthetic',
-          status: 'running',
-          session: {
-            id: agent.session.id,
-            prompt: agent.session.prompt,
-            messageCount: 0,
-          },
-          createdAt: agent.createdAt.toISOString(),
-          startedAt: agent.startedAt?.toISOString() || null,
-          completedAt: null,
-        },
-        timestamp: new Date().toISOString(),
-      });
-      this.logger.log(`[DEBUG] ✅ agent:created emitted successfully for ${agent.id.toString()}`);
-    } catch (error) {
-      this.logger.error(`[DEBUG] ❌ Failed to emit agent:created:`, error);
-      throw error;
-    }
+    // **FIX**: Use AgentResponseDto.fromAgent() for consistency with AgentController
+    // This ensures the payload structure matches what clients expect
+    this.gateway.emitToAll('agent:created', {
+      agent: AgentResponseDto.fromAgent(agent),
+      timestamp: new Date().toISOString(),
+    });
 
     return {
       agentId: agent.id.toString(),

@@ -35,17 +35,25 @@ export type {
   AgentErrorEvent,
   AgentCompleteEvent,
   AgentClientConfig,
+  // Provider types
+  ProviderInfo,
+  ModelInfo,
+  ProviderCapabilities,
+  ProvidersResponse,
+  CostTier,
 } from './types';
 
 // Slices (for advanced usage)
 export { agentsSlice } from './store/slices/agentsSlice';
 export { messagesSlice } from './store/slices/messagesSlice';
 export { connectionSlice } from './store/slices/connectionSlice';
+export { providersSlice } from './store/slices/providersSlice';
 
 // State interfaces
 export type { AgentsState } from './store/slices/agentsSlice';
 export type { MessagesState } from './store/slices/messagesSlice';
 export type { ConnectionState } from './store/slices/connectionSlice';
+export type { ProvidersState } from './store/slices/providersSlice';
 export type { RootState } from './store/selectors';
 
 // Actions (for advanced usage)
@@ -79,6 +87,12 @@ export {
   agentUnsubscribed,
 } from './store/slices/connectionSlice';
 
+export {
+  fetchProviders,
+  providersLoaded,
+  providersLoadFailed,
+} from './store/slices/providersSlice';
+
 // Selectors
 export {
   // Agent selectors
@@ -110,6 +124,14 @@ export {
   selectConnectionError,
   selectSubscribedAgents,
   selectReconnectAttempts,
+
+  // Provider selectors
+  selectAllProviders,
+  selectProviderByType,
+  selectModelsForProvider,
+  selectDefaultModel,
+  selectProvidersLoading,
+  selectProvidersError,
 
   // Combined selectors
   selectAgentWithMessages,

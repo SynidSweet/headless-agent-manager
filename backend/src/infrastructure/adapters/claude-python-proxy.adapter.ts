@@ -14,6 +14,7 @@ interface ProxyAgentInfo {
   agent: Agent;
   observers: Set<IAgentObserver>;
   pythonAgentId?: string; // ID from Python service
+  abortController?: AbortController; // To cancel ongoing stream
 }
 
 /**
@@ -82,10 +83,25 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
       });
     }
 
-    // Track running agent
-    this.runningAgents.set(agent.id.toString(), {
+    // Create abort controller for this agent's stream
+    const abortController = new AbortController();
+
+    // CRITICAL FIX: Preserve observers from pending entry (if subscribe() was called before start())
+    const id = agent.id.toString();
+    const existingInfo = this.runningAgents.get(id);
+    const existingObservers = existingInfo?.observers || new Set();
+
+    console.log(`[ClaudeProxyAdapter] 🚀 Starting agent`, {
+      agentId: id,
+      existingObservers: existingObservers.size,
+      isPendingEntry: existingInfo !== undefined && existingInfo.agent === null,
+    });
+
+    // Track running agent (preserve existing observers)
+    this.runningAgents.set(id, {
       agent,
-      observers: new Set(),
+      observers: existingObservers, // Preserve observers added before start()
+      abortController,
     });
 
     this.logger.info('Starting Claude agent via Python proxy', {
@@ -97,12 +113,12 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
     agent.markAsRunning();
 
     // Start streaming from Python service (don't await - runs in background)
-    this.streamFromProxy(agent.id, session).catch((error) => {
+    this.streamFromProxy(agent.id, session).catch(async (error) => {
       this.logger.error('Fatal proxy stream error', {
         agentId: agent.id.toString(),
         error: error instanceof Error ? error.message : 'Unknown',
       });
-      this.notifyObservers(agent.id, 'onError', error as Error);
+      await this.notifyObservers(agent.id, 'onError', error as Error);
     });
 
     return agent;
@@ -119,9 +135,20 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
       throw new Error(`No running agent found: ${id}`);
     }
 
-    // Call Python proxy stop endpoint
+    // Cancel the ongoing stream to prevent "Cannot log after tests are done" warnings
+    if (agentInfo.abortController) {
+      agentInfo.abortController.abort();
+      this.logger.debug('Aborted stream for agent', { agentId: id });
+    }
+
+    // Call Python proxy stop endpoint and WAIT for process termination
     if (agentInfo.pythonAgentId) {
       try {
+        this.logger.debug('Stopping agent on Python proxy', {
+          agentId: id,
+          pythonAgentId: agentInfo.pythonAgentId,
+        });
+
         const response = await fetch(`${this.proxyUrl}/agent/stop/${agentInfo.pythonAgentId}`, {
           method: 'POST',
         });
@@ -131,7 +158,16 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
             agentId: id,
             status: response.status,
           });
+        } else {
+          this.logger.debug('Python proxy confirmed agent stopped', {
+            agentId: id,
+          });
         }
+
+        // CRITICAL: Wait for process to fully terminate
+        // Python proxy's stop_agent() waits up to 5 seconds for graceful termination
+        // Add a small buffer to ensure the process has exited
+        await new Promise(resolve => setTimeout(resolve, 1000));
       } catch (error) {
         this.logger.error('Error calling proxy stop endpoint', {
           agentId: id,
@@ -165,12 +201,28 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
    */
   subscribe(agentId: AgentId, observer: IAgentObserver): void {
     const id = agentId.toString();
-    const agentInfo = this.runningAgents.get(id);
+    let agentInfo = this.runningAgents.get(id);
 
-    if (agentInfo) {
-      agentInfo.observers.add(observer);
-      this.logger.debug('Observer subscribed to agent', { agentId: id });
+    // CRITICAL FIX: Allow subscription BEFORE start()
+    // OrchestrationService calls subscribe() before start(), so we need to create
+    // a pending entry that will be populated when start() is called
+    if (!agentInfo) {
+      console.log(`[ClaudeProxyAdapter] 📝 Creating pending entry for agent ${id} (subscribed before start)`);
+      agentInfo = {
+        agent: null as any, // Will be set by start()
+        observers: new Set(),
+        abortController: null as any, // Will be set by start()
+      };
+      this.runningAgents.set(id, agentInfo);
     }
+
+    agentInfo.observers.add(observer);
+    console.log(`[ClaudeProxyAdapter] ➕ Observer subscribed to agent`, {
+      agentId: id,
+      totalObservers: agentInfo.observers.size,
+      isPending: agentInfo.agent === null,
+    });
+    this.logger.debug('Observer subscribed to agent', { agentId: id });
   }
 
   /**
@@ -226,6 +278,19 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
         }
       }
 
+      // Add tool filtering if configured
+      if (session.configuration.allowedTools) {
+        requestBody.allowed_tools = session.configuration.allowedTools;
+      }
+
+      if (session.configuration.disallowedTools) {
+        requestBody.disallowed_tools = session.configuration.disallowedTools;
+      }
+
+      // Get abort signal from agent info
+      const currentAgentInfo = this.runningAgents.get(id);
+      const signal = currentAgentInfo?.abortController?.signal;
+
       // Call Python proxy stream endpoint
       const response = await fetch(`${this.proxyUrl}/agent/stream`, {
         method: 'POST',
@@ -233,6 +298,7 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(requestBody),
+        signal, // Pass abort signal to fetch
       });
 
       if (!response.ok) {
@@ -294,7 +360,7 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
           // Handle event
           if (eventType === 'complete') {
             const duration = Date.now() - startTime;
-            this.notifyObservers(agentId, 'onComplete', {
+            await this.notifyObservers(agentId, 'onComplete', {
               status: 'success',
               duration,
               messageCount,
@@ -302,7 +368,7 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
             break;
           } else if (eventType === 'error') {
             const errorData = JSON.parse(data || '{}');
-            this.notifyObservers(agentId, 'onError', new Error(errorData.error || 'Unknown error'));
+            await this.notifyObservers(agentId, 'onError', new Error(errorData.error || 'Unknown error'));
           } else if (data) {
             // Regular message - parse from Claude CLI format to AgentMessage format
             try {
@@ -321,7 +387,15 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
                 type: message.type,
               });
 
-              this.notifyObservers(agentId, 'onMessage', message);
+              console.log(`[ClaudeProxyAdapter] 📥 Raw message from proxy`, {
+                agentId: id,
+                type: message.type,
+                role: message.role,
+                hasContent: !!message.content,
+                contentPreview: typeof message.content === 'string' ? message.content.substring(0, 50) : 'object',
+              });
+
+              await this.notifyObservers(agentId, 'onMessage', message);
             } catch (error) {
               this.logger.error('Failed to parse message', {
                 agentId: id,
@@ -335,11 +409,17 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
 
       this.logger.debug('Proxy stream processing completed', { agentId: id, messageCount });
     } catch (error) {
+      // Don't log errors if the stream was aborted (expected during cleanup)
+      if (error instanceof Error && error.name === 'AbortError') {
+        this.logger.debug('Proxy stream aborted', { agentId: id });
+        return;
+      }
+
       this.logger.error('Proxy stream error', {
         agentId: id,
         error: error instanceof Error ? error.message : 'Unknown',
       });
-      this.notifyObservers(agentId, 'onError', error as Error);
+      await this.notifyObservers(agentId, 'onError', error as Error);
     } finally {
       // Clean up
       this.runningAgents.delete(id);
@@ -349,25 +429,66 @@ export class ClaudePythonProxyAdapter implements IAgentRunner {
   /**
    * Notify all observers
    */
-  private notifyObservers(agentId: AgentId, method: keyof IAgentObserver, data: any): void {
+  private async notifyObservers(agentId: AgentId, method: keyof IAgentObserver, data: any): Promise<void> {
     const id = agentId.toString();
     const agentInfo = this.runningAgents.get(id);
 
     if (!agentInfo) {
+      console.warn(`[ClaudeProxyAdapter] ⚠️ No agentInfo found for ${id} - cannot notify observers`);
       return;
     }
 
-    agentInfo.observers.forEach((observer) => {
+    const observerCount = agentInfo.observers.size;
+    console.log(`[ClaudeProxyAdapter] 🔔 Notifying ${observerCount} observers`, {
+      agentId: id,
+      method,
+      observerCount,
+      dataType: method === 'onMessage' ? (data as any)?.type : typeof data,
+    });
+
+    if (observerCount === 0) {
+      console.warn(`[ClaudeProxyAdapter] ⚠️ WARNING: No observers registered for agent ${id}!`);
+      console.warn(`   Method: ${method}, data will be lost`);
+    }
+
+    for (const observer of agentInfo.observers) {
       try {
-        const fn = observer[method] as Function;
-        fn.call(observer, data);
+        const fn = observer[method] as (arg: any) => Promise<void>;
+        if (fn) {
+          console.log(`[ClaudeProxyAdapter] 📞 Calling observer.${method}...`);
+          await fn.call(observer, data);
+          console.log(`[ClaudeProxyAdapter] ✅ Observer.${method} completed`);
+        }
       } catch (error) {
+        console.error(`[ClaudeProxyAdapter] ❌ Observer notification error`, {
+          agentId: id,
+          method,
+          error: error instanceof Error ? error.message : 'Unknown',
+        });
+
         this.logger.error('Observer notification error', {
           agentId: id,
           method,
           error: error instanceof Error ? error.message : 'Unknown',
         });
       }
-    });
+    }
+  }
+
+  /**
+   * Stop all running agents (useful for cleanup during tests)
+   */
+  async stopAll(): Promise<void> {
+    const agentIds = Array.from(this.runningAgents.keys());
+    this.logger.debug('Stopping all agents', { count: agentIds.length });
+
+    for (const id of agentIds) {
+      try {
+        await this.stop(AgentId.fromString(id));
+      } catch (error) {
+        // Ignore errors during bulk cleanup
+        this.logger.debug('Error stopping agent during cleanup', { agentId: id });
+      }
+    }
   }
 }

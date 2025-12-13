@@ -40,6 +40,8 @@ class StartAgentRequest(BaseModel):
     working_directory: Optional[str] = None
     mcp_config: Optional[str] = None  # JSON string of MCP configuration
     mcp_strict: Optional[bool] = False  # Whether to use --strict-mcp-config
+    allowed_tools: Optional[list[str]] = None  # List of allowed tools
+    disallowed_tools: Optional[list[str]] = None  # List of disallowed tools
 
 
 class StartAgentResponse(BaseModel):
@@ -89,6 +91,10 @@ async def start_agent(request: StartAgentRequest) -> StartAgentResponse:
             options["mcp_config"] = request.mcp_config
         if request.mcp_strict:
             options["mcp_strict"] = request.mcp_strict
+        if request.allowed_tools:
+            options["allowed_tools"] = request.allowed_tools
+        if request.disallowed_tools:
+            options["disallowed_tools"] = request.disallowed_tools
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)
@@ -125,6 +131,10 @@ async def stream_agent(request: StartAgentRequest) -> StreamingResponse:
             options["mcp_config"] = request.mcp_config
         if request.mcp_strict:
             options["mcp_strict"] = request.mcp_strict
+        if request.allowed_tools:
+            options["allowed_tools"] = request.allowed_tools
+        if request.disallowed_tools:
+            options["disallowed_tools"] = request.disallowed_tools
 
         # Start Claude process
         process = claude_runner.start_agent(request.prompt, options)

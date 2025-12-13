@@ -22,10 +22,12 @@ async function bootstrap(): Promise<void> {
   // Enable CORS for frontend integration
   app.enableCors({
     origin: [
-      'http://localhost:5173', // Production frontend
-      'http://localhost:5174', // Development frontend
+      'http://localhost:5173', // Local development
+      'http://localhost:5174', // Local development (alt port)
       'http://localhost:3000',
       'https://agents.petter.ai', // Remote access via Vercel tunnel
+      'https://project.petter.ai', // Production frontend (Vercel)
+      'https://requirements-system-frontend-g0orj4hce.vercel.app', // Vercel deployment URL
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],

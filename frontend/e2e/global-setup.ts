@@ -11,11 +11,13 @@ async function globalSetup() {
 
   console.log('🔍 Checking backend server health...');
 
+  const port = 3001; // Dev backend port
+
   return new Promise<void>((resolve, reject) => {
     const req = http.request(
       {
         hostname: 'localhost',
-        port: 3000,
+        port,
         path: '/api/agents',
         method: 'GET',
         timeout: 5000,
@@ -33,10 +35,12 @@ async function globalSetup() {
 
     req.on('error', (error: any) => {
       console.error('\n❌ BACKEND SERVER NOT RUNNING\n');
-      console.error('The E2E tests require the backend server to be running on port 3000.');
-      console.error('\n📝 To start the backend:');
-      console.error('  cd ../backend');
-      console.error('  npm run dev');
+      console.error(`The E2E tests require the backend server to be running on port ${port}.`);
+      console.error('\n📝 To start the development environment:');
+      console.error('  ./scripts/start-dev.sh');
+      console.error('\n📝 Or start backend manually:');
+      console.error('  cd backend');
+      console.error('  NODE_ENV=development PORT=3001 npm run dev');
       console.error('\n▶️  Then re-run E2E tests:');
       console.error('  npm run test:e2e\n');
       reject(new Error(`Backend not accessible: ${error.message}`));

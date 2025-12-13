@@ -1,5 +1,6 @@
 import type { Agent } from '@headless-agent-manager/client';
 import { AgentLaunchForm } from './AgentLaunchForm';
+import { ConnectionStatus } from './ConnectionStatus';
 
 interface SidebarProps {
   agents: Agent[];
@@ -8,6 +9,9 @@ interface SidebarProps {
 }
 
 export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps) {
+  // DEBUG: Log agents prop
+  console.log('[Sidebar.tsx] 🎨 Render - Agents prop:', agents.length, agents.map(a => ({ id: a.id, status: a.status })));
+
   // Sort agents by createdAt DESC (newest first) before filtering
   // This ensures correct order even when status updates come via WebSocket
   const sortedAgents = [...agents].sort((a, b) =>
@@ -47,6 +51,7 @@ export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps
             activeAgents.map((agent) => (
               <button
                 key={agent.id}
+                data-agent-id={agent.id}
                 onClick={() => onSelectAgent(agent.id)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors text-left ${
                   selectedAgentId === agent.id
@@ -81,6 +86,7 @@ export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps
             historicAgents.slice(0, 10).map((agent) => (
               <button
                 key={agent.id}
+                data-agent-id={agent.id}
                 onClick={() => onSelectAgent(agent.id)}
                 className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors text-left ${
                   selectedAgentId === agent.id
@@ -108,6 +114,11 @@ export function Sidebar({ agents, selectedAgentId, onSelectAgent }: SidebarProps
 
         {/* Spacer */}
         <div className="flex-grow"></div>
+
+        {/* Connection Status */}
+        <div className="border-t border-white/10 p-4">
+          <ConnectionStatus compact />
+        </div>
       </div>
     </aside>
   );

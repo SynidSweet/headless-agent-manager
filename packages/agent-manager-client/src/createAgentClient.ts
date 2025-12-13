@@ -8,6 +8,7 @@ import { io } from 'socket.io-client';
 import { agentsSlice } from './store/slices/agentsSlice';
 import { messagesSlice } from './store/slices/messagesSlice';
 import { connectionSlice } from './store/slices/connectionSlice';
+import { providersSlice } from './store/slices/providersSlice';
 import { createWebSocketMiddleware } from './store/middleware/websocketMiddleware';
 import { AgentApiClient } from './api/AgentApiClient';
 import * as selectors from './store/selectors';
@@ -39,6 +40,12 @@ import {
   agentSubscribed,
   agentUnsubscribed,
 } from './store/slices/connectionSlice';
+
+import {
+  fetchProviders,
+  providersLoaded,
+  providersLoadFailed,
+} from './store/slices/providersSlice';
 
 /**
  * Create a configured agent management client
@@ -90,6 +97,7 @@ export function createAgentClient(config: AgentClientConfig) {
       agents: agentsSlice.reducer,
       messages: messagesSlice.reducer,
       connection: connectionSlice.reducer,
+      providers: providersSlice.reducer,
     },
     middleware: (getDefaultMiddleware) =>
       getDefaultMiddleware().concat(createWebSocketMiddleware(socket)),
@@ -129,6 +137,11 @@ export function createAgentClient(config: AgentClientConfig) {
       reconnecting,
       agentSubscribed,
       agentUnsubscribed,
+
+      // Provider actions
+      fetchProviders,
+      providersLoaded,
+      providersLoadFailed,
     },
 
     /**

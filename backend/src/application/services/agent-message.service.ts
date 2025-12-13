@@ -19,6 +19,11 @@ export class AgentMessageService {
    * @returns Saved message with ID and sequence number
    */
   async saveMessage(createDto: CreateMessageDto): Promise<AgentMessageDto> {
+    console.log('[TRACE] saveMessage START', {
+      agentId: createDto.agentId,
+      messageType: createDto.type
+    });
+
     const db = this.databaseService.getDatabase();
 
     // Generate unique ID
@@ -51,6 +56,7 @@ export class AgentMessageService {
 
     // Execute insert - the subquery ensures atomicity
     // Will throw SqliteError if FK constraint fails
+    console.log('[TRACE] Executing INSERT statement', { id, agentId: createDto.agentId });
     insertStmt.run(
       id,
       createDto.agentId,
@@ -62,6 +68,7 @@ export class AgentMessageService {
       createDto.metadata ? JSON.stringify(createDto.metadata) : null,
       createdAt
     );
+    console.log('[TRACE] INSERT completed', { id });
 
     // With DELETE journal mode, data is synchronously written to disk on INSERT
     // No checkpoint needed - data persists immediately
@@ -75,6 +82,8 @@ export class AgentMessageService {
     if (!result) {
       throw new Error(`Message ${id} was inserted but cannot be retrieved!`);
     }
+
+    console.log('[TRACE] saveMessage COMPLETE', { id, sequenceNumber: result.sequence_number });
 
     // Return DTO
     return {

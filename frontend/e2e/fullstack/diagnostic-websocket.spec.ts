@@ -1,10 +1,17 @@
 import { test, expect } from '@playwright/test';
 import { setupFullStackTest, cleanupAgents } from './setup';
+import { waitForProvidersLoaded } from '../helpers/providerHelper';
 
 let env: any;
 
 test.beforeAll(async () => {
   env = await setupFullStackTest();
+
+  // Skip all tests in this file if Python proxy not available
+  if (!env.pythonProxyAvailable) {
+    console.log('\n⚠️  Python proxy not available - skipping all tests in diagnostic-websocket.spec.ts');
+    console.log('   Start service: cd claude-proxy-service && uvicorn app.main:app --reload\n');
+  }
 });
 
 test.afterEach(async () => {
@@ -12,6 +19,9 @@ test.afterEach(async () => {
 });
 
 test('Diagnostic: WebSocket subscription flow', async ({ page }) => {
+  // Skip if Python proxy not available
+  test.skip(!env.pythonProxyAvailable, 'Requires Python proxy service on port 8000');
+
   const consoleLogs: string[] = [];
 
   // Capture all console logs from browser
@@ -24,9 +34,12 @@ test('Diagnostic: WebSocket subscription flow', async ({ page }) => {
   await page.goto(env.frontendUrl);
   console.log('✅ Step 1: Navigated to frontend');
 
-  // Wait for app to load
-  await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+  // Wait for app to load (actual h1 text is "CodeStream")
+  await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
   console.log('✅ Step 2: App loaded');
+
+  // ✅ Wait for providers to load before interacting with form
+  await waitForProvidersLoaded(page);
 
   // Launch agent
   await page.selectOption('select#agent-type', 'claude-code');
@@ -35,8 +48,8 @@ test('Diagnostic: WebSocket subscription flow', async ({ page }) => {
 
   console.log('✅ Step 3: Agent launch button clicked');
 
-  // Wait for agent to appear
-  await page.waitForSelector('[data-agent-id]', { timeout: 10000 });
+  // Wait for agent to appear (increased timeout)
+  await page.waitForSelector('[data-agent-id]', { timeout: 20000 });
   console.log('✅ Step 4: Agent appeared in list');
 
   // Get agent ID
@@ -48,9 +61,9 @@ test('Diagnostic: WebSocket subscription flow', async ({ page }) => {
   await agentElement.click();
   console.log('✅ Step 6: Agent clicked (selected)');
 
-  // Wait for Claude to respond (can take 5-10 seconds)
-  console.log('⏳ Waiting 15 seconds for Claude CLI to respond...');
-  await page.waitForTimeout(15000);
+  // Wait for Claude to respond (can take longer)
+  console.log('⏳ Waiting 25 seconds for Claude CLI to respond...');
+  await page.waitForTimeout(25000);
 
   // Print all console logs to see if subscription happened
   console.log('\n=== Browser Console Logs ===');
@@ -93,7 +106,7 @@ test('Diagnostic: WebSocket subscription flow', async ({ page }) => {
   }
 
   // Wait for messages to appear
-  const messageElements = await page.locator('[data-message-type]').count();
+  const messageElements = await page.locator('[data-message-id]').count();
   console.log(`UI shows ${messageElements} message elements`);
 
   // This test is for diagnosis - don't fail it

@@ -4,11 +4,19 @@
  */
 
 import { createSelector } from '@reduxjs/toolkit';
-import type { Agent, AgentMessage } from '../../types';
+import type { Agent, AgentMessage, ProviderInfo, ModelInfo, AgentType } from '../../types';
 import type { AgentsState } from '../slices/agentsSlice';
 import type { MessagesState } from '../slices/messagesSlice';
 import type { ConnectionState } from '../slices/connectionSlice';
+import type { ProvidersState } from '../slices/providersSlice';
 import { aggregateStreamingTokens } from '../../utils/messageAggregation';
+
+/**
+ * Constant empty arrays to avoid creating new references
+ * This prevents unnecessary rerenders when selectors return empty results
+ */
+const EMPTY_ARRAY: AgentMessage[] = [];
+const EMPTY_MODEL_ARRAY: ModelInfo[] = [];
 
 /**
  * Root state interface
@@ -18,6 +26,7 @@ export interface RootState {
   agents: AgentsState;
   messages: MessagesState;
   connection: ConnectionState;
+  providers: ProvidersState;
 }
 
 /**
@@ -26,6 +35,7 @@ export interface RootState {
 const selectAgentsState = (state: RootState) => state.agents;
 const selectMessagesState = (state: RootState) => state.messages;
 const selectConnectionState = (state: RootState) => state.connection;
+const selectProvidersState = (state: RootState) => state.providers;
 
 /**
  * Agent selectors
@@ -38,12 +48,15 @@ export const selectAllAgents = createSelector(
   }
 );
 
-export const selectAgentById = (
-  state: RootState,
-  agentId: string
-): Agent | undefined => {
-  return state.agents.byId[agentId];
-};
+export const selectAgentById = createSelector(
+  [
+    (state: RootState) => state.agents.byId,
+    (_state: RootState, agentId: string) => agentId,
+  ],
+  (byId, agentId): Agent | undefined => {
+    return byId[agentId];
+  }
+);
 
 export const selectSelectedAgent = createSelector(
   [selectAgentsState],
@@ -118,7 +131,7 @@ export const selectAggregatedMessagesForAgent = createSelector(
   ],
   (byAgentId, agentId): AgentMessage[] => {
     const agentMessages = byAgentId[agentId];
-    const rawMessages = agentMessages?.messages || [];
+    const rawMessages = agentMessages?.messages || EMPTY_ARRAY;
     return aggregateStreamingTokens(rawMessages);
   }
 );
@@ -147,9 +160,9 @@ export const selectAggregatedMessagesForAgent = createSelector(
 export const selectAggregatedMessagesForSelectedAgent = createSelector(
   [selectAgentsState, selectMessagesState],
   (agentsState, messagesState): AgentMessage[] => {
-    if (!agentsState.selectedAgentId) return [];
+    if (!agentsState.selectedAgentId) return EMPTY_ARRAY;
     const agentMessages = messagesState.byAgentId[agentsState.selectedAgentId];
-    const rawMessages = agentMessages?.messages || [];
+    const rawMessages = agentMessages?.messages || EMPTY_ARRAY;
     return aggregateStreamingTokens(rawMessages);
   }
 );
@@ -209,13 +222,16 @@ export const selectMessagesForSelectedAgent = selectAggregatedMessagesForSelecte
  * @internal For advanced use cases only
  * @see selectAggregatedMessagesForAgent for UI display
  */
-export const selectRawMessagesForAgent_UNSAFE = (
-  state: RootState,
-  agentId: string
-): AgentMessage[] => {
-  const agentMessages = state.messages.byAgentId[agentId];
-  return agentMessages?.messages || [];
-};
+export const selectRawMessagesForAgent_UNSAFE = createSelector(
+  [
+    (state: RootState) => state.messages.byAgentId,
+    (_state: RootState, agentId: string) => agentId,
+  ],
+  (byAgentId, agentId): AgentMessage[] => {
+    const agentMessages = byAgentId[agentId];
+    return agentMessages?.messages || EMPTY_ARRAY;
+  }
+);
 
 /**
  * Select RAW messages for selected agent WITHOUT aggregation (ADVANCED).
@@ -238,21 +254,26 @@ export const selectRawMessagesForAgent_UNSAFE = (
  * @internal For advanced use cases only
  * @see selectAggregatedMessagesForSelectedAgent for UI display
  */
-export const selectRawMessagesForSelectedAgent_UNSAFE = (
-  state: RootState
-): AgentMessage[] => {
-  const selectedId = state.agents.selectedAgentId;
-  if (!selectedId) return [];
-  return selectRawMessagesForAgent_UNSAFE(state, selectedId);
-};
+export const selectRawMessagesForSelectedAgent_UNSAFE = createSelector(
+  [selectAgentsState, selectMessagesState],
+  (agentsState, messagesState): AgentMessage[] => {
+    const selectedId = agentsState.selectedAgentId;
+    if (!selectedId) return EMPTY_ARRAY;
+    const agentMessages = messagesState.byAgentId[selectedId];
+    return agentMessages?.messages || EMPTY_ARRAY;
+  }
+);
 
-export const selectLastSequenceForAgent = (
-  state: RootState,
-  agentId: string
-): number => {
-  const agentMessages = state.messages.byAgentId[agentId];
-  return agentMessages?.lastSequence || 0;
-};
+export const selectLastSequenceForAgent = createSelector(
+  [
+    (state: RootState) => state.messages.byAgentId,
+    (_state: RootState, agentId: string) => agentId,
+  ],
+  (byAgentId, agentId): number => {
+    const agentMessages = byAgentId[agentId];
+    return agentMessages?.lastSequence || 0;
+  }
+);
 
 /**
  * Connection selectors
@@ -294,15 +315,70 @@ export const selectReconnectAttempts = createSelector(
 );
 
 /**
+ * Provider selectors
+ */
+
+export const selectAllProviders = createSelector(
+  [selectProvidersState],
+  (providersState): ProviderInfo[] => {
+    return providersState.providers;
+  }
+);
+
+export const selectProviderByType = createSelector(
+  [
+    (state: RootState) => state.providers.providers,
+    (_state: RootState, providerType: AgentType) => providerType,
+  ],
+  (providers, providerType): ProviderInfo | undefined => {
+    return providers.find((p) => p.type === providerType);
+  }
+);
+
+export const selectModelsForProvider = createSelector(
+  [
+    (state: RootState, providerType: AgentType) => selectProviderByType(state, providerType),
+  ],
+  (provider): ModelInfo[] => {
+    return provider?.models || EMPTY_MODEL_ARRAY;
+  }
+);
+
+export const selectDefaultModel = createSelector(
+  [
+    (state: RootState, providerType: AgentType) => selectModelsForProvider(state, providerType),
+  ],
+  (models): ModelInfo | undefined => {
+    // Return default model or first model if no default
+    return models.find((m) => m.isDefault) || models[0];
+  }
+);
+
+export const selectProvidersLoading = createSelector(
+  [selectProvidersState],
+  (providersState): boolean => {
+    return providersState.loading;
+  }
+);
+
+export const selectProvidersError = createSelector(
+  [selectProvidersState],
+  (providersState): string | null => {
+    return providersState.error;
+  }
+);
+
+/**
  * Computed selectors (cross-slice)
  */
 
-export const selectAgentWithMessages = (state: RootState, agentId: string) => {
-  const agent = selectAgentById(state, agentId);
-  const messages = selectMessagesForAgent(state, agentId);
-
-  return {
+export const selectAgentWithMessages = createSelector(
+  [
+    (state: RootState, agentId: string) => selectAgentById(state, agentId),
+    (state: RootState, agentId: string) => selectMessagesForAgent(state, agentId),
+  ],
+  (agent, messages) => ({
     agent,
     messages,
-  };
-};
+  })
+);

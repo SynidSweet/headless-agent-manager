@@ -69,12 +69,22 @@ export function createWebSocketMiddleware(socket: Socket): Middleware {
     socket.on('agent:message', (event: AgentMessageEvent) => {
       const { agentId, message } = event;
 
+      // DIAGNOSTIC LOGGING
+      console.log(`[WebSocketMiddleware] 📨 agent:message received`, {
+        agentId,
+        messageType: message?.type,
+        contentPreview: message?.content?.substring(0, 50),
+        sequenceNumber: message?.sequenceNumber,
+        timestamp: new Date().toISOString(),
+      });
+
       // Get current state to check for gaps
       const state = store.getState();
       const agentMessages = state.messages?.byAgentId?.[agentId];
 
       // Dispatch message to store
       store.dispatch(messageReceived({ agentId, message }));
+      console.log(`[WebSocketMiddleware] ✅ Dispatched to Redux`);
 
       // Gap detection and auto-fill
       // Only for persisted messages (sequenceNumber > 0)
@@ -136,9 +146,14 @@ export function createWebSocketMiddleware(socket: Socket): Middleware {
      */
 
     socket.on('agent:created', (event: any) => {
-      console.log('[WebSocketMiddleware] 🚀 LIFECYCLE EVENT: agent:created', event);
+      console.log(`[WebSocketMiddleware] 🚀 LIFECYCLE EVENT: agent:created agentId=${event.agent?.id}`, event);
+      console.log('[WebSocketMiddleware] event.agent data:', JSON.stringify(event.agent, null, 2));
+      console.log('[WebSocketMiddleware] About to dispatch agentCreated action...');
       // PHASE 2: Dispatch to Redux!
-      store.dispatch(agentCreated(event.agent));
+      const action = agentCreated(event.agent);
+      console.log('[WebSocketMiddleware] Created action:', action);
+      store.dispatch(action);
+      console.log('[WebSocketMiddleware] ✅ Action dispatched successfully');
     });
 
     socket.on('agent:updated', (event: any) => {
@@ -151,6 +166,22 @@ export function createWebSocketMiddleware(socket: Socket): Middleware {
       console.log('[WebSocketMiddleware] 🗑️  LIFECYCLE EVENT: agent:deleted', event);
       // PHASE 2: Dispatch to Redux!
       store.dispatch(agentDeleted(event.agentId));
+    });
+
+    /**
+     * Subscription confirmation event
+     *
+     * Backend emits 'subscribed' when a client successfully subscribes to an agent.
+     * E2E tests wait for this event (via socket.on('subscribed')) to ensure
+     * subscription is complete before testing message reception.
+     *
+     * This middleware listener is primarily for debugging - Socket.IO automatically
+     * forwards the event to all registered listeners including E2E test helpers.
+     */
+    socket.on('subscribed', (event: { agentId: string; timestamp: string }) => {
+      console.log('[WebSocketMiddleware] ✅ Subscription confirmed:', event);
+      // Socket.IO automatically forwards this event to all listeners
+      // No additional action needed - E2E tests receive it directly
     });
 
     // Return the middleware function

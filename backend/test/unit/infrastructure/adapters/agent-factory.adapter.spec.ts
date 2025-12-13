@@ -5,6 +5,7 @@ import { IAgentRunner } from '@application/ports/agent-runner.port';
 describe('AgentFactoryAdapter', () => {
   let factory: AgentFactoryAdapter;
   let mockClaudeAdapter: jest.Mocked<IAgentRunner>;
+  let mockGeminiAdapter: jest.Mocked<IAgentRunner>;
 
   beforeEach(() => {
     mockClaudeAdapter = {
@@ -15,7 +16,15 @@ describe('AgentFactoryAdapter', () => {
       unsubscribe: jest.fn(),
     } as any;
 
-    factory = new AgentFactoryAdapter(mockClaudeAdapter);
+    mockGeminiAdapter = {
+      start: jest.fn(),
+      stop: jest.fn(),
+      getStatus: jest.fn(),
+      subscribe: jest.fn(),
+      unsubscribe: jest.fn(),
+    } as any;
+
+    factory = new AgentFactoryAdapter(mockClaudeAdapter, mockGeminiAdapter);
   });
 
   describe('create', () => {
@@ -25,10 +34,10 @@ describe('AgentFactoryAdapter', () => {
       expect(adapter).toBe(mockClaudeAdapter);
     });
 
-    it('should throw error for GEMINI_CLI type (not implemented)', () => {
-      expect(() => factory.create(AgentType.GEMINI_CLI)).toThrow(
-        'Agent type not supported: gemini-cli'
-      );
+    it('should return GeminiCLIAdapter for GEMINI_CLI type', () => {
+      const adapter = factory.create(AgentType.GEMINI_CLI);
+
+      expect(adapter).toBe(mockGeminiAdapter);
     });
 
     it('should throw error for unknown agent type', () => {

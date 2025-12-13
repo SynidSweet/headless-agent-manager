@@ -10,14 +10,18 @@
  */
 
 import { useEffect } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, shallowEqual } from 'react-redux';
 import {
   selectMessagesForAgent,
+  selectAggregatedMessagesForSelectedAgent,
   fetchMessages,
   type AgentMessage,
 } from '@headless-agent-manager/client';
 import type { RootState } from '@/store/store';
 import { useAppDispatch } from './useAppState';
+
+// Constant empty array to avoid creating new references
+const EMPTY_MESSAGES: AgentMessage[] = [];
 
 /**
  * Hook return type
@@ -55,18 +59,24 @@ export function useAgentMessages(agentId: string | null): UseAgentMessagesResult
   const dispatch = useAppDispatch();
 
   // Select messages from Redux state (already aggregated by selector)
-  const messages = useSelector((state: RootState) => {
-    if (!agentId) return [];
-    return selectMessagesForAgent(state, agentId);
-  });
-
-  // Select loading and error states
-  const loading = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
+  // Use shallowEqual to prevent rerenders when array contents are the same
+  const messages = useSelector(
+    (state: RootState) => {
+      if (!agentId) return EMPTY_MESSAGES;
+      return selectMessagesForAgent(state, agentId);
+    },
+    shallowEqual
   );
 
-  const error = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
+  // Select loading and error states
+  const loading = useSelector(
+    (state: RootState) =>
+      agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
+  );
+
+  const error = useSelector(
+    (state: RootState) =>
+      agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
   );
 
   /**

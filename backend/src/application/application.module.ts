@@ -3,6 +3,7 @@ import { AgentOrchestrationService } from './services/agent-orchestration.servic
 import { StreamingService } from './services/streaming.service';
 import { AgentMessageService } from './services/agent-message.service';
 import { ApplicationLifecycleService } from './services/application-lifecycle.service';
+import { ProviderInfoService } from './services/provider-info.service';
 import { AgentGateway } from './gateways/agent.gateway';
 import { InfrastructureModule } from '@infrastructure/infrastructure.module';
 
@@ -23,6 +24,7 @@ import { InfrastructureModule } from '@infrastructure/infrastructure.module';
     StreamingService,
     AgentMessageService,
     ApplicationLifecycleService,
+    ProviderInfoService,
     AgentGateway,
     {
       provide: 'IWebSocketGateway',
@@ -34,6 +36,7 @@ import { InfrastructureModule } from '@infrastructure/infrastructure.module';
     StreamingService,
     AgentMessageService,
     ApplicationLifecycleService,
+    ProviderInfoService,
     AgentGateway,
   ],
 })

@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { setupFullStackTest, cleanupAgents } from './setup';
 import { waitForWebSocketEvent, getWebSocketStatus } from '../helpers/waitForWebSocketEvent';
+import { waitForProvidersLoaded } from '../helpers/providerHelper';
 
 /**
  * PHASE 3: Event-Driven E2E Tests
@@ -20,9 +21,18 @@ let env: any;
 
 test.beforeAll(async () => {
   env = await setupFullStackTest();
+
+  // Skip all tests in this file if Python proxy not available
+  if (!env.pythonProxyAvailable) {
+    console.log('\n⚠️  Python proxy not available - skipping all tests in event-driven.spec.ts');
+    console.log('   Start service: cd claude-proxy-service && uvicorn app.main:app --reload\n');
+  }
 });
 
 test.beforeEach(async ({ page }) => {
+  // Skip if Python proxy not available
+  test.skip(!env.pythonProxyAvailable, 'Requires Python proxy service on port 8000');
+
   await cleanupAgents(env.backendUrl);
 
   // Reload page to clear state
@@ -45,12 +55,15 @@ test.describe('Event-Driven E2E Tests', () => {
   test('agent appears in UI via agent:created event', async ({ page }) => {
     // Navigate to app
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
 
     // Check WebSocket is connected
     const wsStatus = await getWebSocketStatus(page);
     expect(wsStatus.connected, 'WebSocket should be connected').toBe(true);
     console.log('✅ WebSocket connected:', wsStatus.id);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Fill in launch form
     await page.selectOption('select#agent-type', 'claude-code');
@@ -91,7 +104,10 @@ test.describe('Event-Driven E2E Tests', () => {
   test('agent status updates via agent:updated event', async ({ page }) => {
     // Navigate
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');
@@ -137,7 +153,10 @@ test.describe('Event-Driven E2E Tests', () => {
    */
   test('tracks complete agent lifecycle via events', async ({ page }) => {
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');
@@ -198,7 +217,10 @@ test.describe('Event-Driven E2E Tests', () => {
    */
   test('events match database state', async ({ page }) => {
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');

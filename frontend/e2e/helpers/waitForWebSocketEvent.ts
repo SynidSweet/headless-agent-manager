@@ -3,6 +3,8 @@ import { Page } from '@playwright/test';
 export interface WaitForEventOptions {
   timeout?: number;
   predicate?: (data: any) => boolean;
+  /** Only match events from this specific agent ID (prevents cross-test contamination) */
+  agentId?: string;
 }
 
 /**
@@ -38,13 +40,14 @@ export async function waitForWebSocketEvent(
   eventName: string,
   options: WaitForEventOptions = {}
 ): Promise<any> {
-  const { timeout = 30000, predicate } = options;
+  const { timeout = 30000, predicate, agentId } = options;
 
-  console.log(`⏳ Waiting for WebSocket event: ${eventName} (timeout: ${timeout}ms)`);
+  const filterDesc = agentId ? ` for agent ${agentId}` : predicate ? ' with custom filter' : '';
+  console.log(`⏳ Waiting for WebSocket event: ${eventName}${filterDesc} (timeout: ${timeout}ms)`);
 
   // Use page.evaluate to listen for event in browser context
   const result = await page.evaluate(
-    ({ event, timeoutMs, predicateFn }) => {
+    ({ event, timeoutMs, predicateFn, filterAgentId }) => {
       return new Promise((resolve, reject) => {
         const socket = (window as any).socket;
 
@@ -61,6 +64,26 @@ export async function waitForWebSocketEvent(
 
         // Create event handler
         const handler = (data: any) => {
+          console.log(`[waitForWebSocketEvent] 🎯 Handler called for ${event}`, {
+            data: JSON.stringify(data).substring(0, 100),
+            timestamp: new Date().toISOString(),
+          });
+
+          // CRITICAL: Agent ID filtering to prevent cross-test contamination
+          if (filterAgentId) {
+            const eventAgentId = data.agentId || data.agent?.id || data.id;
+            if (eventAgentId !== filterAgentId) {
+              console.log(
+                `[waitForWebSocketEvent] 🚫 Filtered out ${event} from agent ${eventAgentId} (expected ${filterAgentId})`
+              );
+              return; // Not our agent, keep listening
+            } else {
+              console.log(
+                `[waitForWebSocketEvent] ✅ Agent ID matched: ${eventAgentId}`
+              );
+            }
+          }
+
           // If predicate provided, eval it (it's a string from evaluate)
           if (predicateFn) {
             try {
@@ -84,15 +107,23 @@ export async function waitForWebSocketEvent(
         };
 
         // Listen for event
+        // Note: We use .on() not .once() because Socket.IO doesn't guarantee listener execution
+        // order. The middleware also listens for this event, and both listeners must execute.
+        // We handle cleanup manually with socket.off() on line 96.
         socket.on(event, handler);
 
-        console.log(`[waitForWebSocketEvent] Listening for: ${event}`);
+        console.log(`[waitForWebSocketEvent] 📡 Registered listener for: ${event}`, {
+          agentIdFilter: filterAgentId,
+          listenerCount: socket.listeners(event).length,
+          timestamp: new Date().toISOString(),
+        });
       });
     },
     {
       event: eventName,
       timeoutMs: timeout,
       predicateFn: predicate?.toString(),
+      filterAgentId: agentId,
     }
   );
 
@@ -198,7 +229,7 @@ export async function waitForNthWebSocketEvent(
           }
         };
 
-        socket.on(event, handler);
+        socket.on(event, handler); // Use .on() - manual cleanup on line 196
       });
     },
     {

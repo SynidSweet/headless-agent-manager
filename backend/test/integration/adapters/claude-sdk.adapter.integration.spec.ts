@@ -40,7 +40,7 @@ describe('ClaudeSDKAdapter Integration (Real API)', () => {
       let completed = false;
 
       const observer: IAgentObserver = {
-        onMessage: (message: AgentMessage) => {
+        onMessage: async (message: AgentMessage) => {
           messages.push(message);
           console.log('[TEST] Message:', message.type, message.metadata?.isDelta ? '(delta)' : '');
 
@@ -49,11 +49,11 @@ describe('ClaudeSDKAdapter Integration (Real API)', () => {
             process.stdout.write(message.content);
           }
         },
-        onStatusChange: jest.fn(),
-        onError: (error) => {
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: async (error) => {
           console.error('[TEST] Error:', error.message);
         },
-        onComplete: (result) => {
+        onComplete: async (result) => {
           completed = true;
           console.log('\n[TEST] Completed:', result.status, `(${result.duration}ms)`);
           console.log('[TEST] Usage:', result.stats?.usage);
@@ -112,12 +112,12 @@ describe('ClaudeSDKAdapter Integration (Real API)', () => {
       let completed = false;
 
       const observer: IAgentObserver = {
-        onMessage: (message: AgentMessage) => {
+        onMessage: async (message: AgentMessage) => {
           messages.push(message);
         },
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: () => {
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: async () => {
           completed = true;
         },
       };

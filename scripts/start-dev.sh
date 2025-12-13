@@ -15,10 +15,10 @@ lsof -ti:5174 | xargs -r kill -9 2>/dev/null || true
 rm -f backend/data/backend.pid
 sleep 2
 
-# Start backend on port 3001
+# Start backend on port 3001 with NODE_ENV=development
 echo "Starting backend on port 3001..."
 cd backend
-PORT=3001 nohup npm run dev > /tmp/backend-dev.log 2>&1 &
+NODE_ENV=development PORT=3001 nohup npm run dev > /tmp/backend-dev.log 2>&1 &
 BACKEND_PID=$!
 echo "  Backend PID: $BACKEND_PID"
 cd ..

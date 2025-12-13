@@ -8,12 +8,18 @@ import {
   createMessageSchedule,
 } from '../helpers/syntheticAgent';
 import { selectAgentAndSubscribe } from '../helpers/subscriptionHelpers';
+import { cleanupAllAgents } from '../helpers/cleanup';
+import {
+  TestContext,
+  verifyTestIsolation,
+  logIsolationStatus,
+} from '../helpers/testIsolation';
 
-const BACKEND_URL = 'http://localhost:3000';
-const FRONTEND_URL = 'http://localhost:5173';
+const BACKEND_URL = 'http://localhost:3001';
+const FRONTEND_URL = 'http://localhost:5174'; // Must match playwright.config.ts webServer port
 
 /**
- * Event-Driven Core Tests
+ * Event-Driven Core Tests (WITH ISOLATION GUARDS)
  *
  * These tests verify the fundamental event-driven architecture:
  * 1. Agent launches and appears via agent:created event
@@ -21,27 +27,71 @@ const FRONTEND_URL = 'http://localhost:5173';
  * 3. WebSocket events match database state
  *
  * All tests are event-based (no arbitrary timeouts!)
+ *
+ * CRITICAL: Tests MUST NOT receive events from other tests' agents
+ * - Pre-test verification ensures clean state
+ * - Test context tracks which agents belong to which test
+ * - Event filtering only accepts events from OUR agents
+ * - Post-test cleanup verification ensures cleanup completed
  */
 
 test.describe('Event-Driven Core', () => {
   test.beforeEach(async ({ page, request }) => {
-    // Reset database for test isolation
-    await request.post(`${BACKEND_URL}/api/test/reset-database`);
+    console.log('\n🔧 Setting up test environment...');
 
-    // Navigate to app
+    // STEP 1: Reset database for test isolation
+    await request.post(`${BACKEND_URL}/api/test/reset-database`);
+    console.log('   ✅ Database reset');
+
+    // STEP 2: Navigate to app
     await page.goto(FRONTEND_URL);
 
-    // Wait for app to load (h1 element appears)
-    await expect(page.locator('h1')).toContainText('Headless AI Agent', { timeout: 10000 });
+    // STEP 3: Wait for app to load (h1 element appears, actual text is "CodeStream")
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+    console.log('   ✅ App loaded');
 
-    // Now check WebSocket connection (should be connected after app loads)
+    // STEP 4: Reload page to fetch fresh data from database (clears stale Redux state)
+    await page.reload();
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+    console.log('   ✅ Page reloaded with fresh data');
+
+    // STEP 5: Verify WebSocket connected
     const wsStatus = await getWebSocketStatus(page);
     expect(wsStatus.connected).toBe(true);
-    console.log('✅ WebSocket connected:', wsStatus.id);
+    console.log('   ✅ WebSocket connected:', wsStatus.id);
+
+    // STEP 6: CRITICAL - Verify test isolation
+    await verifyTestIsolation(request, page);
+    console.log('   ✅ Test isolation verified\n');
+  });
+
+  test.afterEach(async ({ page, request }) => {
+    console.log('\n🧹 Cleaning up after test...');
+
+    // CRITICAL: Ensure clean state for next test
+    try {
+      await cleanupAllAgents(request, {
+        maxRetries: 3,
+        retryDelay: 1000,
+        throwOnFailure: true,
+      });
+      console.log('   ✅ Cleanup completed\n');
+    } catch (error) {
+      console.error('   ❌ Cleanup failed:', error);
+      // Log diagnostic info
+      await logIsolationStatus(request, page);
+      throw error; // Fail the test - don't let next test run with dirty state
+    }
   });
 
   test('Test 1: agent launches and appears via event', async ({ page, request }) => {
-    console.log('\n🧪 Test 1: Event-Driven Agent Launch');
+    // Create test context for tracking
+    const context = new TestContext('Test 1: Event-Driven Agent Launch');
+
+    console.log('\n🧪 Starting isolated test...\n');
+
+    // Log initial state
+    await logIsolationStatus(request, page, context);
 
     // Set up listener BEFORE launching agent (avoid race condition)
     const eventPromise = waitForWebSocketEvent(page, 'agent:created', {
@@ -50,14 +100,16 @@ test.describe('Event-Driven Core', () => {
 
     // Launch synthetic agent with quick schedule (5 seconds total)
     const schedule = createMessageSchedule([1000, 2000], 3000);
-    const agentId = await launchSyntheticAgent(BACKEND_URL, schedule, 'Test 1: Event launch');
+    const agentId = await launchSyntheticAgent(BACKEND_URL, schedule, 'Test 1: Event launch (isolated)');
 
-    console.log('🚀 Synthetic agent launched:', agentId);
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
 
     // WAIT FOR EVENT (listener was set up before launch!)
     const event = await eventPromise;
 
-    // Verify event data
+    // CRITICAL: Verify event is from OUR agent
     expect(event.agent.id).toBe(agentId);
     expect(event.agent.type).toBe('synthetic');
     expect(event.agent.status).toBe('running');
@@ -81,33 +133,49 @@ test.describe('Event-Driven Core', () => {
     expect(dbAgent.type).toBe('synthetic');
 
     console.log('✅ Test 1 PASSED: Agent launched via event-driven flow');
+
+    // Log final state
+    await logIsolationStatus(request, page, context);
+
+    // Mark test complete
+    context.complete();
   });
 
-  test('Test 2: synthetic agent emits events on schedule', async ({ page }) => {
-    console.log('\n🧪 Test 2: Synthetic Agent with Controllable Timing');
+  test('Test 2: synthetic agent emits events on schedule', async ({ page, request }) => {
+    // Create test context for tracking
+    const context = new TestContext('Test 2: Synthetic Agent with Timing');
+
+    console.log('\n🧪 Starting isolated test...\n');
 
     // Set up listener FIRST
     const createdPromise = waitForWebSocketEvent(page, 'agent:created');
 
     // Launch synthetic agent with 3-second schedule
-    await launchSyntheticAgent(BACKEND_URL, [
+    const agentId = await launchSyntheticAgent(BACKEND_URL, [
       { delay: 1000, type: 'message', data: { content: 'Message 1' } },
       { delay: 2000, type: 'message', data: { content: 'Message 2' } },
       { delay: 3000, type: 'complete', data: { success: true } },
     ]);
 
-    console.log('🚀 Synthetic agent launched');
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
 
     // Wait for agent:created (should be immediate)
     const createdEvent = await createdPromise;
-    const agentId = createdEvent.agent.id;
+
+    // CRITICAL: Verify event is from OUR agent
+    expect(createdEvent.agent.id).toBe(agentId);
 
     console.log('✅ agent:created received');
-    console.log('   Agent ID from event:', agentId);
 
-    // Set up message listeners BEFORE selecting agent (avoid race condition)
-    const msg1Promise = waitForWebSocketEvent(page, 'agent:message');
-    const msg2Promise = waitForWebSocketEvent(page, 'agent:message');
+    // CRITICAL: Set up message listeners with agent ID filter BEFORE selecting agent
+    const msg1Promise = waitForWebSocketEvent(page, 'agent:message', {
+      agentId, // Only accept messages from OUR agent
+    });
+    const msg2Promise = waitForWebSocketEvent(page, 'agent:message', {
+      agentId, // Only accept messages from OUR agent
+    });
 
     // Select agent AND wait for subscription to complete
     // This ensures the client is in the agent's room before messages arrive
@@ -118,6 +186,8 @@ test.describe('Event-Driven Core', () => {
     const msg1 = await msg1Promise;
     const firstMessageTime = Date.now() - start;
 
+    // CRITICAL: Verify message is from OUR agent
+    expect(msg1.agentId).toBe(agentId);
     console.log(`✅ First message arrived at ${firstMessageTime}ms`);
     console.log('   Message content:', msg1.message.content);
 
@@ -128,10 +198,13 @@ test.describe('Event-Driven Core', () => {
     // Wait for second message (arrives at exactly 2s from start)
     const msg2 = await msg2Promise;
 
+    // CRITICAL: Verify message is from OUR agent
+    expect(msg2.agentId).toBe(agentId);
     console.log('✅ Second message received:', msg2.message.content);
 
     // Wait for completion (arrives at exactly 3s from start)
     const completion = await waitForWebSocketEvent(page, 'agent:complete', {
+      agentId, // Only accept completion from OUR agent
       timeout: 3000,
     });
 
@@ -140,32 +213,47 @@ test.describe('Event-Driven Core', () => {
 
     console.log('✅ Test 2 PASSED: Complete lifecycle tracked with precise timing!');
     console.log(`   Total test time: ~${Date.now() - start}ms`);
+
+    // Mark test complete
+    context.complete();
   });
 
   test('Test 3: events match database state', async ({ page, request }) => {
-    console.log('\n🧪 Test 3: Database State Matches Events');
+    // Create test context for tracking
+    const context = new TestContext('Test 3: Database State Matches Events');
+
+    console.log('\n🧪 Starting isolated test...\n');
 
     // Set up listener FIRST
     const createdPromise = waitForWebSocketEvent(page, 'agent:created');
 
     // Launch synthetic agent with quick schedule
-    await launchSyntheticAgent(BACKEND_URL, [
+    const agentId = await launchSyntheticAgent(BACKEND_URL, [
       { delay: 500, type: 'message', data: { content: 'Test message' } },
       { delay: 1000, type: 'complete', data: { success: true } },
     ]);
 
-    console.log('🚀 Synthetic agent launched');
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
 
     // Wait for agent:created event
     const createdEvent = await createdPromise;
 
-    const agentId = createdEvent.agent.id;
+    // CRITICAL: Verify event is from OUR agent
+    expect(createdEvent.agent.id).toBe(agentId);
 
     console.log('✅ agent:created event received');
 
-    // Set up ALL event listeners BEFORE subscribing (avoid race conditions)
-    const messagePromise = waitForWebSocketEvent(page, 'agent:message', { timeout: 3000 });
-    const completionPromise = waitForWebSocketEvent(page, 'agent:complete', { timeout: 3000 });
+    // CRITICAL: Set up event listeners with agent ID filter BEFORE subscribing
+    const messagePromise = waitForWebSocketEvent(page, 'agent:message', {
+      agentId, // Only accept messages from OUR agent
+      timeout: 3000,
+    });
+    const completionPromise = waitForWebSocketEvent(page, 'agent:complete', {
+      agentId, // Only accept completion from OUR agent
+      timeout: 3000,
+    });
 
     // Subscribe to agent to receive messages
     await selectAgentAndSubscribe(page, agentId);
@@ -183,13 +271,12 @@ test.describe('Event-Driven Core', () => {
     expect(createdEvent.agent.session.prompt).toBe(dbAgent.session.prompt);
 
     console.log('✅ Event data matches database state!');
-    console.log('   Event agent ID:', createdEvent.agent.id);
-    console.log('   DB agent ID:', dbAgent.id);
-    console.log('   Event status:', createdEvent.agent.status);
-    console.log('   DB status:', dbAgent.status);
 
-    // Wait for message event (no predicate needed - we're subscribed to this agent)
+    // Wait for message event
     const messageEvent = await messagePromise;
+
+    // CRITICAL: Verify message is from OUR agent
+    expect(messageEvent.agentId).toBe(agentId);
 
     console.log('✅ agent:message event received');
 
@@ -208,8 +295,6 @@ test.describe('Event-Driven Core', () => {
     expect(dbMessage.content).toBe(messageEvent.message.content);
 
     console.log('✅ Message event matches database!');
-    console.log('   Event message ID:', messageEvent.message.id);
-    console.log('   DB message ID:', dbMessage.id);
 
     // Wait for completion (listener was set up earlier)
     await completionPromise;
@@ -221,5 +306,8 @@ test.describe('Event-Driven Core', () => {
 
     console.log('✅ Completion event matches database!');
     console.log('✅ Test 3 PASSED: All events match database state');
+
+    // Mark test complete
+    context.complete();
   });
 });

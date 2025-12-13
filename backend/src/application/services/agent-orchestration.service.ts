@@ -156,25 +156,27 @@ export class AgentOrchestrationService {
         status: agent.status,
       });
 
-      // Step 3.5: Save prompt as first message
-      // This ensures the user's prompt appears as the first message in the conversation
-      try {
-        await this.messageService.saveMessage({
-          agentId: agent.id.toString(),
-          type: 'user',
-          role: 'user',
-          content: agent.session.prompt,
-        });
-        this.logger.log('User prompt saved as first message', {
-          agentId: agent.id.toString(),
-        });
-      } catch (error) {
-        // Log error but don't fail the launch
-        // The agent can still function without the prompt message
-        this.logger.warn('Failed to save prompt as first message', {
-          agentId: agent.id.toString(),
-          error: error instanceof Error ? error.message : String(error),
-        });
+      // Step 3.5: Save prompt as first message (only for agents that don't output it themselves)
+      // Gemini CLI outputs the user prompt itself, so skip for gemini-cli to avoid duplicates
+      if (agent.type !== AgentType.GEMINI_CLI) {
+        try {
+          await this.messageService.saveMessage({
+            agentId: agent.id.toString(),
+            type: 'user',
+            role: 'user',
+            content: agent.session.prompt,
+          });
+          this.logger.log('User prompt saved as first message', {
+            agentId: agent.id.toString(),
+          });
+        } catch (error) {
+          // Log error but don't fail the launch
+          // The agent can still function without the prompt message
+          this.logger.warn('Failed to save prompt as first message', {
+            agentId: agent.id.toString(),
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       // Step 4: Get appropriate runner from factory
@@ -186,10 +188,16 @@ export class AgentOrchestrationService {
         agentId: agent.id.toString(),
       });
 
-      // Step 6: Start runner (will emit messages)
+      // Step 6: Auto-subscribe via StreamingService BEFORE starting
+      // CRITICAL: Observers MUST be attached BEFORE observable starts emitting (Observer Pattern contract)
+      // This prevents early messages from being dropped (10-20ms race window)
+      this.streamingService.subscribeToAgent(agent.id, 'system-orchestrator', runner);
+      this.logger.log(`Auto-subscribed to agent ${agent.id.toString()} (before start)`);
+
+      // Step 7: Start runner (will emit messages - observers now ready)
       const startedAgent = await runner.start(sessionWithAgentId);
 
-      // Step 7: Update agent status to RUNNING
+      // Step 8: Update agent status to RUNNING
       if (startedAgent.id.toString() !== agent.id.toString()) {
         this.logger.warn('Runner returned different agent ID!', {
           expectedId: agent.id.toString(),
@@ -198,15 +206,11 @@ export class AgentOrchestrationService {
       }
       agent.markAsRunning();
 
-      // Step 8: Save RUNNING status to database
+      // Step 9: Save RUNNING status to database
       await this.agentRepository.save(agent);
 
-      // Step 9: Store runner for this agent
+      // Step 10: Store runner for this agent
       this.runnerStorage.set(agent.id.toString(), runner);
-
-      // Step 10: Auto-subscribe via StreamingService
-      this.streamingService.subscribeToAgent(agent.id, 'system-orchestrator', runner);
-      this.logger.log(`Auto-subscribed to agent ${agent.id.toString()}`);
 
       // Step 11: Restore instruction environment (instructions now cached by Claude)
       if (backup) {
@@ -251,15 +255,28 @@ export class AgentOrchestrationService {
       throw new Error(`Agent not found: ${agentId.toString()}`);
     }
 
+    this.logger.log('Terminating agent', {
+      agentId: agentId.toString(),
+      status: agent.status.toString(),
+    });
+
     // Get runner for this agent type
     const runner = this.agentFactory.create(agent.type);
 
     // Try to stop the runner (gracefully handle if process already dead)
     try {
+      // CRITICAL: Wait for runner.stop() to complete
+      // For real agents, this includes waiting for the process to exit
       await runner.stop(agentId);
+      this.logger.log('Agent runner stopped successfully', {
+        agentId: agentId.toString(),
+      });
     } catch (error) {
       // Log but continue - we still want to mark agent as terminated
-      console.warn(`Failed to stop agent runner: ${error}`);
+      this.logger.warn('Failed to stop agent runner', {
+        agentId: agentId.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
 
     // Mark agent as terminated
@@ -270,6 +287,10 @@ export class AgentOrchestrationService {
 
     // Save updated state
     await this.agentRepository.save(agent);
+
+    this.logger.log('Agent terminated successfully', {
+      agentId: agentId.toString(),
+    });
   }
 
   /**

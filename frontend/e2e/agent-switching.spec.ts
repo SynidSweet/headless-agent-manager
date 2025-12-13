@@ -69,8 +69,9 @@ test.describe('Agent Switching', () => {
       const agent = agents.first();
       await agent.click();
 
-      // Output panel should show "Output" heading
-      await expect(page.locator('h3:has-text("Output")')).toBeVisible();
+      // Output panel should update - the heading shows the agent's prompt (not "Output")
+      // Check that we're no longer showing the empty state message
+      await expect(page.locator('text=/Select an agent or start a new one/i')).not.toBeVisible({ timeout: 5000 });
     }
   });
 });

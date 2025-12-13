@@ -1,0 +1,52 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e5]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: CS
+        - generic [ref=e10]:
+          - heading "CodeStream" [level=1] [ref=e11]
+          - paragraph [ref=e12]: AI Agent Console
+      - generic [ref=e14]:
+        - heading "Launch New Agent (v2.0)" [level=2] [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: "Agent Type:"
+            - combobox "Agent Type:" [ref=e19]:
+              - option "Claude Code" [selected]
+              - option "Gemini CLI"
+          - generic [ref=e20]:
+            - generic [ref=e21]: "Model:"
+            - combobox "Model:" [ref=e22]:
+              - option "Default (Claude Sonnet 4.5)" [selected]
+              - option "Claude Sonnet 4.5 - Best model for complex agents and coding tasks with optimal balance of intelligence, speed, and cost (medium)"
+              - option "Claude Opus 4.5 - Most intelligent model with 80.9% SWE-bench score, best for complex reasoning (high)"
+              - option "Claude Haiku 4.5 - Fastest model with near-frontier performance, optimized for high-volume tasks (low)"
+          - generic [ref=e23]:
+            - generic [ref=e24]: "Prompt:"
+            - textbox "Prompt:" [ref=e25]:
+              - /placeholder: Enter your prompt for the agent...
+          - generic [ref=e26]:
+            - generic [ref=e27]: "Working Directory:"
+            - textbox "Working Directory:" [ref=e28]:
+              - /placeholder: /path/to/project (optional)
+          - generic [ref=e29]:
+            - generic [ref=e30]: "Conversation Name (Optional):"
+            - textbox "Conversation Name (Optional):" [ref=e31]:
+              - /placeholder: e.g., Fix login bug, Add dark mode
+            - generic [ref=e32]: Max 100 characters. Helps organize your agent history.
+          - button "Launch Agent" [ref=e33] [cursor=pointer]
+      - generic [ref=e34]:
+        - heading "Active Agents (0)" [level=3] [ref=e35]
+        - paragraph [ref=e36]: No active agents
+      - generic [ref=e37]:
+        - heading "Historic Agents (0)" [level=3] [ref=e38]
+        - paragraph [ref=e39]: No history yet
+      - generic [ref=e43]: Connected
+  - main [ref=e44]:
+    - generic [ref=e46]:
+      - generic [ref=e47]: terminal
+      - paragraph [ref=e48]: Select an agent or start a new one
+```

@@ -135,6 +135,47 @@ export class StreamingService {
   }
 
   /**
+   * Unsubscribe ALL clients from a specific agent
+   * Used during agent cleanup to remove all subscriptions and rooms
+   * @param agentId - The agent ID to clean up
+   */
+  unsubscribeAllForAgent(agentId: AgentId): void {
+    const agentKey = agentId.toString();
+    const subscription = this.subscriptions.get(agentKey);
+
+    if (!subscription) {
+      return; // No subscription exists
+    }
+
+    // Get all client IDs subscribed to this agent (copy to avoid mutation during iteration)
+    const clientIds = Array.from(subscription.clientIds);
+
+    // Remove each client from the agent subscription
+    clientIds.forEach((clientId) => {
+      // Remove client from agent's client set
+      subscription.clientIds.delete(clientId);
+
+      // Remove agent from client's subscription map
+      const clientSubs = this.clientSubscriptions.get(clientId);
+      if (clientSubs) {
+        clientSubs.delete(agentKey);
+        if (clientSubs.size === 0) {
+          this.clientSubscriptions.delete(clientId);
+        }
+      }
+
+      // Remove client from WebSocket room
+      this.websocketGateway.leaveRoom(clientId, `agent:${agentKey}`);
+    });
+
+    // Unsubscribe from runner
+    subscription.runner.unsubscribe(agentId, subscription.observer);
+
+    // Remove subscription from map
+    this.subscriptions.delete(agentKey);
+  }
+
+  /**
    * Broadcast agent message to all subscribed clients
    * CRITICAL: Messages MUST be saved to database first to maintain data integrity
    * FK constraint violations indicate agent doesn't exist - this is a FATAL error
@@ -143,29 +184,40 @@ export class StreamingService {
    * @throws Error if agent doesn't exist (FK constraint violation)
    */
   async broadcastMessage(agentId: AgentId, message: AgentMessage): Promise<void> {
-    console.log('[TRACE] broadcastMessage START', { agentId: agentId.toString(), messageType: message.type });
+    const agentKey = agentId.toString();
+
+    console.log(`[StreamingService] 📢 Broadcasting message`, {
+      agentId: agentKey,
+      messageType: message.type,
+      role: message.role,
+      contentPreview: typeof message.content === 'string' ? message.content.substring(0, 100) : JSON.stringify(message.content).substring(0, 100),
+      timestamp: new Date().toISOString(),
+    });
 
     // 1. MUST save to database first (maintains referential integrity)
     try {
-      console.log('[TRACE] Attempting DB save...');
+      console.log('[StreamingService] 💾 Attempting DB save...');
       const savedMessage = await this.messageService.saveMessage({
-        agentId: agentId.toString(),
+        agentId: agentKey,
         type: message.type as 'user' | 'assistant' | 'system' | 'error' | 'tool' | 'response',
         role: message.role,
         content: message.content,
         raw: message.raw,
         metadata: message.metadata,
       });
-      console.log('[TRACE] DB save SUCCESS', { messageId: savedMessage.id });
+      console.log('[StreamingService] ✅ DB save SUCCESS', { messageId: savedMessage.id, sequenceNumber: savedMessage.sequenceNumber });
 
       // 2. ONLY emit to WebSocket after successful DB save
-      console.log('[TRACE] Emitting agent:message to WebSocket...', { room: `agent:${agentId.toString()}` });
-      this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:message', {
-        agentId: agentId.toString(),
+      const room = `agent:${agentKey}`;
+      console.log(`[StreamingService] 📡 About to emit to WebSocket room "${room}"...`);
+
+      this.websocketGateway.emitToRoom(room, 'agent:message', {
+        agentId: agentKey,
         message: savedMessage,
         timestamp: new Date().toISOString(),
       });
-      console.log('[TRACE] WebSocket emission COMPLETE');
+
+      console.log(`[StreamingService] ✅ Message broadcast complete`);
     } catch (error) {
       const err = error as Error;
 
@@ -323,39 +375,55 @@ export class StreamingService {
    * Create an observer for agent events
    * @param agentId - The agent ID
    * @returns The observer
+   *
+   * CRITICAL FIX: All callbacks now AWAIT persistence before returning
+   * This ensures messages are saved to database before being queried
+   * Fixes race condition where messages were queried before writes completed
    */
   private createObserver(agentId: AgentId): IAgentObserver {
     return {
-      onMessage: (message: AgentMessage) => {
-        // Fire and forget for real-time updates
-        // IMPORTANT: FK violations will be logged and emitted as agent:error events
-        // but won't block the agent runner from continuing
-        this.broadcastMessage(agentId, message).catch(error => {
+      onMessage: async (message: AgentMessage) => {
+        console.log('[StreamingService] 👂 Observer.onMessage CALLED', {
+          agentId: agentId.toString(),
+          messageType: message.type,
+          role: message.role,
+          contentPreview: typeof message.content === 'string' ? message.content.substring(0, 100) : JSON.stringify(message.content).substring(0, 100),
+          timestamp: new Date().toISOString(),
+        });
+
+        // CRITICAL: AWAIT message persistence
+        // This ensures sequential message processing and prevents race conditions
+        try {
+          await this.broadcastMessage(agentId, message);
+        } catch (error) {
           // Log critical errors but don't crash the agent
-          console.error('CRITICAL: Failed to broadcast message - data may be lost', {
+          console.error('[StreamingService] ❌ CRITICAL: Failed to broadcast message - data may be lost', {
             agentId: agentId.toString(),
-            error: error.message,
+            error: error instanceof Error ? error.message : 'Unknown',
           });
 
           // Emit error to frontend so users know something went wrong
           this.websocketGateway.emitToRoom(`agent:${agentId.toString()}`, 'agent:error', {
             agentId: agentId.toString(),
             error: {
-              message: `Message broadcast failed: ${error.message}`,
-              name: error.name,
+              message: `Message broadcast failed: ${error instanceof Error ? error.message : 'Unknown'}`,
+              name: error instanceof Error ? error.name : 'Error',
             },
             timestamp: new Date().toISOString(),
           });
-        });
+        }
       },
-      onStatusChange: (status: AgentStatus) => {
+      onStatusChange: async (status: AgentStatus) => {
+        // Status change is synchronous, just wrap in Promise.resolve()
         this.broadcastStatusChange(agentId, status);
       },
-      onError: (error: Error) => {
-        this.broadcastError(agentId, error);
+      onError: async (error: Error) => {
+        // CRITICAL: AWAIT error persistence
+        await this.broadcastError(agentId, error);
       },
-      onComplete: (result: AgentResult) => {
-        this.broadcastComplete(agentId, result);
+      onComplete: async (result: AgentResult) => {
+        // CRITICAL: AWAIT completion persistence
+        await this.broadcastComplete(agentId, result);
       },
     };
   }

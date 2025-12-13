@@ -38,8 +38,19 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
     });
   });
 
-  afterEach((done) => {
-    mockServer.close(() => done());
+  afterEach(async () => {
+    // Stop all running agents before closing server
+    if (adapter) {
+      await adapter.stopAll();
+    }
+
+    // Wait for streams to fully abort
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Close server
+    await new Promise<void>((resolve) => {
+      mockServer.close(() => resolve());
+    });
   });
 
   describe('SSE stream processing', () => {
@@ -69,10 +80,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test prompt', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -133,10 +144,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -173,10 +184,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -210,10 +221,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -279,10 +290,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -308,10 +319,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await badAdapter.start(session);
@@ -378,8 +389,8 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
         onMessage: jest.fn().mockImplementation(() => {
           throw new Error('Observer crashed!');
         }),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
         onComplete: jest.fn().mockImplementation(() => {
           throw new Error('Observer crashed on complete!');
         }),
@@ -419,10 +430,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -457,17 +468,17 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
       const session = Session.create('Test', {});
 
       const observer1: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const observer2: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -633,10 +644,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);
@@ -675,10 +686,10 @@ describe('ClaudePythonProxyAdapter (Integration)', () => {
 
       const session = Session.create('Test', {});
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       const agent = await adapter.start(session);

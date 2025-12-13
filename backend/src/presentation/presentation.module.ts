@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AgentController } from './controllers/agent.controller';
 import { TestController } from './controllers/test.controller';
 import { HealthController } from './controllers/health.controller';
+import { ProvidersController } from './controllers/providers.controller';
 import { ApplicationModule } from '@application/application.module';
 import { InfrastructureModule } from '@infrastructure/infrastructure.module';
 
@@ -13,6 +14,6 @@ import { InfrastructureModule } from '@infrastructure/infrastructure.module';
  */
 @Module({
   imports: [ApplicationModule, InfrastructureModule],
-  controllers: [AgentController, TestController, HealthController],
+  controllers: [AgentController, TestController, HealthController, ProvidersController],
 })
 export class PresentationModule {}

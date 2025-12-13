@@ -42,7 +42,7 @@ export async function selectAgentAndSubscribe(
   agentId: string,
   options: { timeout?: number } = {}
 ): Promise<void> {
-  const { timeout = 5000 } = options;
+  const { timeout = 10000 } = options;
 
   console.log(`[Subscription] Selecting agent and subscribing: ${agentId}`);
 
@@ -57,20 +57,47 @@ export async function selectAgentAndSubscribe(
           return;
         }
 
-        const timer = setTimeout(() => {
-          socket.off('subscribed', handler);
-          reject(new Error(`Timeout waiting for subscribed event (${timeoutMs}ms)`));
-        }, timeoutMs);
+        // Check if socket is connected
+        if (!socket.connected) {
+          console.warn('[Subscription] Socket not connected yet, waiting...');
+          // Wait for connection before setting up subscription
+          socket.once('connect', () => {
+            console.log('[Subscription] Socket connected, proceeding with subscription');
+            setupSubscription();
+          });
+        } else {
+          setupSubscription();
+        }
 
-        const handler = (data: any) => {
-          if (data.agentId === agentIdToMatch) {
-            clearTimeout(timer);
-            socket.off('subscribed', handler);
-            resolve(data);
-          }
-        };
+        function setupSubscription() {
+          const timer = setTimeout(() => {
+            socket.off('subscribed', subscribeHandler);
+            socket.off('error', errorHandler);
+            reject(new Error(`Timeout waiting for subscribed event (${timeoutMs}ms)`));
+          }, timeoutMs);
 
-        socket.on('subscribed', handler);
+          const subscribeHandler = (data: any) => {
+            if (data.agentId === agentIdToMatch) {
+              clearTimeout(timer);
+              socket.off('subscribed', subscribeHandler);
+              socket.off('error', errorHandler);
+              resolve(data);
+            }
+          };
+
+          const errorHandler = (error: any) => {
+            // Check if error is related to our subscription
+            if (error.event === 'subscribe' && error.agentId === agentIdToMatch) {
+              clearTimeout(timer);
+              socket.off('subscribed', subscribeHandler);
+              socket.off('error', errorHandler);
+              reject(new Error(`Subscription failed: ${error.message}`));
+            }
+          };
+
+          socket.on('subscribed', subscribeHandler);
+          socket.on('error', errorHandler);
+        }
       });
     },
     { agentIdToMatch: agentId, timeoutMs: timeout }
@@ -108,7 +135,7 @@ export async function subscribeToAgent(
   agentId: string,
   options: { timeout?: number } = {}
 ): Promise<void> {
-  const { timeout = 5000 } = options;
+  const { timeout = 10000 } = options;
 
   console.log(`[Subscription] Programmatically subscribing to agent: ${agentId}`);
 
@@ -122,20 +149,47 @@ export async function subscribeToAgent(
           return;
         }
 
-        const timer = setTimeout(() => {
-          socket.off('subscribed', handler);
-          reject(new Error(`Timeout waiting for subscribed event (${timeoutMs}ms)`));
-        }, timeoutMs);
+        // Check if socket is connected
+        if (!socket.connected) {
+          console.warn('[Subscription] Socket not connected yet, waiting...');
+          // Wait for connection before setting up subscription
+          socket.once('connect', () => {
+            console.log('[Subscription] Socket connected, proceeding with subscription');
+            setupSubscription();
+          });
+        } else {
+          setupSubscription();
+        }
 
-        const handler = (data: any) => {
-          if (data.agentId === agentIdToMatch) {
-            clearTimeout(timer);
-            socket.off('subscribed', handler);
-            resolve(data);
-          }
-        };
+        function setupSubscription() {
+          const timer = setTimeout(() => {
+            socket.off('subscribed', subscribeHandler);
+            socket.off('error', errorHandler);
+            reject(new Error(`Timeout waiting for subscribed event (${timeoutMs}ms)`));
+          }, timeoutMs);
 
-        socket.on('subscribed', handler);
+          const subscribeHandler = (data: any) => {
+            if (data.agentId === agentIdToMatch) {
+              clearTimeout(timer);
+              socket.off('subscribed', subscribeHandler);
+              socket.off('error', errorHandler);
+              resolve(data);
+            }
+          };
+
+          const errorHandler = (error: any) => {
+            // Check if error is related to our subscription
+            if (error.event === 'subscribe' && error.agentId === agentIdToMatch) {
+              clearTimeout(timer);
+              socket.off('subscribed', subscribeHandler);
+              socket.off('error', errorHandler);
+              reject(new Error(`Subscription failed: ${error.message}`));
+            }
+          };
+
+          socket.on('subscribed', subscribeHandler);
+          socket.on('error', errorHandler);
+        }
       });
     },
     { agentIdToMatch: agentId, timeoutMs: timeout }

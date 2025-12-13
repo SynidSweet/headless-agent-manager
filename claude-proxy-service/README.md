@@ -74,6 +74,18 @@ ptw
 
 ## Run Server
 
+### Quick Start (Recommended)
+
+```bash
+# Start service (handles venv activation automatically)
+./start-service.sh
+
+# Stop service
+./stop-service.sh
+```
+
+### Manual Start
+
 ```bash
 # Activate venv
 source venv/bin/activate
@@ -83,6 +95,23 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Production server
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+```
+
+### Background Mode (for E2E tests)
+
+```bash
+# Start in background with logs
+source venv/bin/activate
+nohup uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > /tmp/python-proxy.log 2>&1 &
+
+# Check if running
+curl http://localhost:8000/health
+
+# View logs
+tail -f /tmp/python-proxy.log
+
+# Stop background service
+kill $(lsof -ti:8000)
 ```
 
 ---

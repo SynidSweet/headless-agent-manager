@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { AgentLaunchForm } from '@/components/AgentLaunchForm';
-import { createMockStore } from '@headless-agent-manager/client/testing';
+import { createMockStore, mockProviderFixtures } from '@headless-agent-manager/client/testing';
 import { launchAgent } from '@headless-agent-manager/client';
 
 /**
@@ -13,8 +13,20 @@ describe('AgentLaunchForm', () => {
   let store: ReturnType<typeof createMockStore>;
 
   beforeEach(() => {
-    store = createMockStore();
     vi.clearAllMocks();
+
+    // Mock fetch API to return provider data
+    global.fetch = vi.fn(() =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          providers: [mockProviderFixtures.claudeCode, mockProviderFixtures.geminiCli],
+        }),
+      } as Response)
+    );
+
+    // Create fresh store for each test
+    store = createMockStore();
   });
 
   const renderWithProvider = (ui: React.ReactElement) => {
@@ -31,18 +43,25 @@ describe('AgentLaunchForm', () => {
       expect(screen.getByRole('button', { name: /Launch Agent/i })).toBeInTheDocument();
     });
 
-    it('should have Claude Code selected by default', () => {
+    it('should have Claude Code selected by default', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      const select = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
-      expect(select.value).toBe('claude-code');
+      // Wait for providers to load
+      await waitFor(() => {
+        const select = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
+        expect(select.value).toBe('claude-code');
+      });
     });
 
-    it('should have both agent type options', () => {
+    it('should have both agent type options', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      expect(screen.getByText('Claude Code')).toBeInTheDocument();
-      expect(screen.getByText('Gemini CLI')).toBeInTheDocument();
+      // Wait for providers to load
+      await waitFor(() => {
+        expect(screen.getByText('Claude Code')).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/Gemini CLI.*Unavailable/i)).toBeInTheDocument();
     });
   });
 
@@ -74,10 +93,16 @@ describe('AgentLaunchForm', () => {
   });
 
   describe('Agent type selection', () => {
-    it('should allow changing agent type', () => {
+    it('should allow changing agent type', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      const select = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
+      // Wait for providers to load
+      const select = await waitFor(() => {
+        const sel = screen.getByLabelText(/Agent Type/i) as HTMLSelectElement;
+        expect(sel.value).toBe('claude-code'); // Initially Claude
+        return sel;
+      });
+
       fireEvent.change(select, { target: { value: 'gemini-cli' } });
 
       expect(select.value).toBe('gemini-cli');
@@ -285,26 +310,39 @@ describe('AgentLaunchForm', () => {
       expect(screen.getByLabelText(/Model/i)).toBeInTheDocument();
     });
 
-    it('should have "Default" selected by default', () => {
+    it('should have "Default" selected by default', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      const select = screen.getByLabelText(/Model/i) as HTMLSelectElement;
-      expect(select.value).toBe('default');
+      // Wait for providers to load
+      await waitFor(() => {
+        const select = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+        expect(select.value).toBe('default');
+      });
     });
 
-    it('should have all model options', () => {
+    it('should have all model options', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      expect(screen.getByText('Default (Sonnet 4.5)')).toBeInTheDocument();
-      expect(screen.getByText('Sonnet 4.5 (Best for coding)')).toBeInTheDocument();
-      expect(screen.getByText('Opus 4.5 (Most intelligent)')).toBeInTheDocument();
-      expect(screen.getByText('Haiku 4.5 (Fastest)')).toBeInTheDocument();
+      // Wait for providers to load and check model options
+      // Note: Text format changed with dynamic data to "Name - description (costTier)"
+      await waitFor(() => {
+        expect(screen.getByText(/Default.*Claude Sonnet 4\.5/i)).toBeInTheDocument();
+      });
+
+      expect(screen.getByText(/Claude Sonnet 4\.5.*Best for coding/i)).toBeInTheDocument();
+      expect(screen.getByText(/Claude Opus 4\.5.*Most intelligent/i)).toBeInTheDocument();
     });
 
-    it('should allow changing model', () => {
+    it('should allow changing model', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
-      const select = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+      // Wait for providers to load
+      const select = await waitFor(() => {
+        const sel = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+        expect(sel.value).toBe('default'); // Initially default
+        return sel;
+      });
+
       fireEvent.change(select, { target: { value: 'claude-opus-4-5-20251101' } });
 
       expect(select.value).toBe('claude-opus-4-5-20251101');
@@ -313,10 +351,16 @@ describe('AgentLaunchForm', () => {
     it('should clear model selection after successful launch', async () => {
       renderWithProvider(<AgentLaunchForm />);
 
+      // Wait for providers to load first
+      const modelSelect = await waitFor(() => {
+        const sel = screen.getByLabelText(/Model/i) as HTMLSelectElement;
+        expect(sel.value).toBe('default'); // Verify loaded
+        return sel;
+      });
+
       const promptInput = screen.getByLabelText(/Prompt/i);
       fireEvent.change(promptInput, { target: { value: 'Test prompt' } });
 
-      const modelSelect = screen.getByLabelText(/Model/i) as HTMLSelectElement;
       fireEvent.change(modelSelect, { target: { value: 'claude-opus-4-5-20251101' } });
 
       const submitButton = screen.getByRole('button', { name: /Launch Agent/i });

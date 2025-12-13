@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector, useDispatch, shallowEqual } from 'react-redux';
 import { Sidebar } from './components/Sidebar';
 import { AgentOutput } from './components/AgentOutput';
 import { actions, selectors } from './store/store';
@@ -8,8 +8,11 @@ import type { AppDispatch, RootState } from './store/store';
 function App() {
   const dispatch = useDispatch<AppDispatch>();
 
-  const agents = useSelector(selectors.selectAllAgents) || [];
+  const agents = useSelector(selectors.selectAllAgents, shallowEqual) || [];
   const selectedAgentId = useSelector((state: RootState) => state.agents.selectedAgentId);
+
+  // DEBUG: Log when agents change
+  console.log('[App.tsx] 🎨 Component render - Agent count:', agents.length, agents.map(a => a.id));
 
   useEffect(() => {
     dispatch(actions.fetchAgents());

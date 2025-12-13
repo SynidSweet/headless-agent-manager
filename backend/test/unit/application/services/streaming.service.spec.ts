@@ -504,4 +504,121 @@ describe('StreamingService', () => {
       expect(() => service.unsubscribeClient(clientId)).not.toThrow();
     });
   });
+
+  describe('unsubscribeAllForAgent', () => {
+    it('should unsubscribe all clients from agent', () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const client1 = 'client-1';
+      const client2 = 'client-2';
+
+      service.subscribeToAgent(agentId, client1, mockAgentRunner);
+      service.subscribeToAgent(agentId, client2, mockAgentRunner);
+
+      // Reset mocks to clear subscription calls
+      mockAgentRunner.unsubscribe.mockClear();
+      mockWebSocketGateway.leaveRoom.mockClear();
+
+      // Act
+      service.unsubscribeAllForAgent(agentId);
+
+      // Assert
+      // Should remove both clients from room
+      expect(mockWebSocketGateway.leaveRoom).toHaveBeenCalledWith(
+        client1,
+        `agent:${agentId.toString()}`
+      );
+      expect(mockWebSocketGateway.leaveRoom).toHaveBeenCalledWith(
+        client2,
+        `agent:${agentId.toString()}`
+      );
+
+      // Should unsubscribe from runner (only once, even with 2 clients)
+      expect(mockAgentRunner.unsubscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle no subscriptions gracefully', () => {
+      // Arrange
+      const agentId = AgentId.generate();
+
+      // Act & Assert - Should not throw
+      expect(() => service.unsubscribeAllForAgent(agentId)).not.toThrow();
+
+      // Should not call any cleanup methods
+      expect(mockAgentRunner.unsubscribe).not.toHaveBeenCalled();
+      expect(mockWebSocketGateway.leaveRoom).not.toHaveBeenCalled();
+    });
+
+    it('should clean up subscription tracking structures', () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const client1 = 'client-1';
+      const client2 = 'client-2';
+
+      service.subscribeToAgent(agentId, client1, mockAgentRunner);
+      service.subscribeToAgent(agentId, client2, mockAgentRunner);
+
+      // Act
+      service.unsubscribeAllForAgent(agentId);
+
+      // Assert - Subscribing new client should create fresh subscription
+      mockAgentRunner.subscribe.mockClear();
+      service.subscribeToAgent(agentId, 'client-3', mockAgentRunner);
+
+      // Should create new subscription (not reuse old one)
+      expect(mockAgentRunner.subscribe).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not affect other agent subscriptions', () => {
+      // Arrange
+      const agent1 = AgentId.generate();
+      const agent2 = AgentId.generate();
+      const client1 = 'client-1';
+
+      const runner1 = { ...mockAgentRunner };
+      const runner2 = { ...mockAgentRunner };
+
+      service.subscribeToAgent(agent1, client1, runner1 as any);
+      service.subscribeToAgent(agent2, client1, runner2 as any);
+
+      // Reset to track only cleanup calls
+      mockWebSocketGateway.leaveRoom.mockClear();
+
+      // Act - Unsubscribe all clients from agent1
+      service.unsubscribeAllForAgent(agent1);
+
+      // Assert - Should only affect agent1, not agent2
+      expect(mockWebSocketGateway.leaveRoom).toHaveBeenCalledWith(
+        client1,
+        `agent:${agent1.toString()}`
+      );
+      expect(mockWebSocketGateway.leaveRoom).not.toHaveBeenCalledWith(
+        client1,
+        `agent:${agent2.toString()}`
+      );
+    });
+
+    it('should remove agent from all client subscription maps', () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const client1 = 'client-1';
+      const client2 = 'client-2';
+
+      service.subscribeToAgent(agentId, client1, mockAgentRunner);
+      service.subscribeToAgent(agentId, client2, mockAgentRunner);
+
+      // Act
+      service.unsubscribeAllForAgent(agentId);
+
+      // Assert - Unsubscribing client should not try to remove agent again
+      mockWebSocketGateway.leaveRoom.mockClear();
+      service.unsubscribeClient(client1);
+
+      // Should not call leaveRoom for this agent (already removed)
+      expect(mockWebSocketGateway.leaveRoom).not.toHaveBeenCalledWith(
+        client1,
+        `agent:${agentId.toString()}`
+      );
+    });
+  });
 });

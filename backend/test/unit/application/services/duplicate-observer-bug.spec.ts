@@ -49,17 +49,17 @@ describe('Duplicate Observer Bug (Unit)', () => {
 
     // Create TWO observers (simulating the bug)
     const observer1 = {
-      onMessage: (msg: any) => messagesReceived.push({ observer: 1, msg }),
-      onStatusChange: () => {},
-      onError: () => {},
-      onComplete: () => {},
+      onMessage: async (msg: any) => { messagesReceived.push({ observer: 1, msg }); },
+      onStatusChange: async () => {},
+      onError: async () => {},
+      onComplete: async () => {},
     };
 
     const observer2 = {
-      onMessage: (msg: any) => messagesReceived.push({ observer: 2, msg }),
-      onStatusChange: () => {},
-      onError: () => {},
-      onComplete: () => {},
+      onMessage: async (msg: any) => { messagesReceived.push({ observer: 2, msg }); },
+      onStatusChange: async () => {},
+      onError: async () => {},
+      onComplete: async () => {},
     };
 
     // Subscribe BOTH observers (this is the bug!)
@@ -104,10 +104,10 @@ describe('Duplicate Observer Bug (Unit)', () => {
     const messagesReceived: any[] = [];
 
     const observer = {
-      onMessage: (msg: any) => messagesReceived.push(msg),
-      onStatusChange: () => {},
-      onError: () => {},
-      onComplete: () => {},
+      onMessage: async (msg: any) => { messagesReceived.push(msg); },
+      onStatusChange: async () => {},
+      onError: async () => {},
+      onComplete: async () => {},
     };
 
     // Act: Subscribe SAME observer twice
@@ -139,10 +139,10 @@ describe('Duplicate Observer Bug (Unit)', () => {
     const messagesReceived: any[] = [];
 
     const observer = {
-      onMessage: (msg: any) => messagesReceived.push(msg),
-      onStatusChange: () => {},
-      onError: () => {},
-      onComplete: () => {},
+      onMessage: async (msg: any) => { messagesReceived.push(msg); },
+      onStatusChange: async () => {},
+      onError: async () => {},
+      onComplete: async () => {},
     };
 
     adapter.subscribe(agentId, observer);

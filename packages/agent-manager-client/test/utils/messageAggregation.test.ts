@@ -451,4 +451,276 @@ describe('aggregateStreamingTokens', () => {
       expect(result[0]).toEqual(messages[0]);
     });
   });
+
+  describe('Gemini Delta Accumulation', () => {
+    it('should aggregate Gemini delta messages (metadata.delta = true)', () => {
+      const messages: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'TypeScript is a supers',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'et of JavaScript that',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-3',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' adds static typing.',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 3,
+          metadata: { delta: true },
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        id: 'msg-1',
+        type: 'assistant',
+        content: 'TypeScript is a superset of JavaScript that adds static typing.',
+        metadata: {
+          delta: true,
+          aggregated: true,
+          tokenCount: 3,
+          streaming: true,
+        },
+      });
+    });
+
+    it('should mark Gemini delta as complete when followed by non-delta message', () => {
+      const messages: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'First',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' part',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-3',
+          agentId: 'agent-1',
+          type: 'user',
+          content: 'Follow-up',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 3,
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]?.metadata?.streaming).toBe(false);
+      expect(result[0]?.content).toBe('First part');
+      expect(result[1]?.content).toBe('Follow-up');
+    });
+
+    it('should handle multiple Gemini delta sequences separately', () => {
+      const messages: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'First',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' answer',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-3',
+          agentId: 'agent-1',
+          type: 'user',
+          content: 'Question 2',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 3,
+        },
+        {
+          id: 'msg-4',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Second',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 4,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-5',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' answer',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 5,
+          metadata: { delta: true },
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(3);
+      expect(result[0]?.content).toBe('First answer');
+      expect(result[0]?.metadata?.aggregated).toBe(true);
+      expect(result[1]?.content).toBe('Question 2');
+      expect(result[2]?.content).toBe('Second answer');
+      expect(result[2]?.metadata?.aggregated).toBe(true);
+      expect(result[2]?.metadata?.streaming).toBe(true);
+    });
+
+    it('should NOT aggregate non-delta Gemini messages', () => {
+      const messages: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Complete message 1',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Complete message 2',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]?.content).toBe('Complete message 1');
+      expect(result[1]?.content).toBe('Complete message 2');
+    });
+
+    it('should handle mixed Claude and Gemini delta formats', () => {
+      const messages: AgentMessage[] = [
+        // Claude delta
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Claude',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+          metadata: { eventType: 'content_delta' },
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' says',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+          metadata: { eventType: 'content_delta' },
+        },
+        {
+          id: 'msg-3',
+          agentId: 'agent-1',
+          type: 'user',
+          content: 'User prompt',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 3,
+        },
+        // Gemini delta
+        {
+          id: 'msg-4',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Gemini',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 4,
+          metadata: { delta: true },
+        },
+        {
+          id: 'msg-5',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' responds',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 5,
+          metadata: { delta: true },
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(3);
+      expect(result[0]?.content).toBe('Claude says');
+      expect(result[0]?.metadata?.aggregated).toBe(true);
+      expect(result[1]?.content).toBe('User prompt');
+      expect(result[2]?.content).toBe('Gemini responds');
+      expect(result[2]?.metadata?.aggregated).toBe(true);
+    });
+
+    it('should preserve Gemini metadata fields in aggregated message', () => {
+      const messages: AgentMessage[] = [
+        {
+          id: 'msg-1',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: 'Test',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 1,
+          metadata: {
+            delta: true,
+            timestamp: '2025-12-02T22:31:44.781Z',
+            customField: 'value',
+          },
+        },
+        {
+          id: 'msg-2',
+          agentId: 'agent-1',
+          type: 'assistant',
+          content: ' message',
+          timestamp: new Date().toISOString(),
+          sequenceNumber: 2,
+          metadata: { delta: true },
+        },
+      ];
+
+      const result = aggregateStreamingTokens(messages);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]?.metadata).toMatchObject({
+        delta: true,
+        timestamp: '2025-12-02T22:31:44.781Z',
+        customField: 'value',
+        aggregated: true,
+        tokenCount: 2,
+        streaming: true,
+      });
+    });
+  });
 });

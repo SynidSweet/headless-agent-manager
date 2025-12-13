@@ -64,7 +64,7 @@ export async function waitForMessages(
     }
 
     // Check UI
-    const uiCount = await page.locator('[data-message-type]').count();
+    const uiCount = await page.locator('[data-message-id]').count();
 
     // Log changes
     if (dbCount !== lastDbCount || uiCount !== lastUiCount) {
@@ -120,7 +120,7 @@ export async function waitForMessages(
       await page.waitForTimeout(1000);
 
       // Check UI again after manual fetch
-      const uiCountAfterFetch = await page.locator('[data-message-type]').count();
+      const uiCountAfterFetch = await page.locator('[data-message-id]').count();
       if (uiCountAfterFetch > 0) {
         console.log(`✅ Manual fetch succeeded: ${uiCountAfterFetch} messages now in UI`);
         return uiCountAfterFetch;

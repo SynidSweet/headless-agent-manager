@@ -121,11 +121,27 @@ export const agentsSlice = createSlice({
     // Handle agent:created event from backend
     agentCreated: (state, action: PayloadAction<Agent>) => {
       const agent = action.payload;
+      console.log('[Redux] 🔥 BRAND NEW CODE - agentCreated reducer called');
+
+      // DEBUG: Log to globalThis to see if logs are being swallowed
+      if (typeof globalThis !== 'undefined' && typeof (globalThis as any).window !== 'undefined') {
+        const win = (globalThis as any).window;
+        win.__REDUX_DEBUG = win.__REDUX_DEBUG || [];
+        win.__REDUX_DEBUG.push({
+          action: 'agentCreated',
+          agentId: agent?.id,
+          allIdsBefore: [...state.allIds],
+          byIdKeysBefore: Object.keys(state.byId),
+        });
+        console.log('[Redux] 🔥 __REDUX_DEBUG length:', win.__REDUX_DEBUG.length);
+      }
+
       state.byId[agent.id] = agent;
       if (!state.allIds.includes(agent.id)) {
         state.allIds.push(agent.id);
       }
-      console.log('[Redux] Agent created via lifecycle event:', agent.id);
+
+      console.log('[Redux] 🔥 Agent created via lifecycle event:', agent.id, '| Total agents:', state.allIds.length);
 
       // If this is the agent we're waiting for, ensure it's selected and clear pending
       if (state.pendingLaunchId === agent.id) {
@@ -175,12 +191,14 @@ export const agentsSlice = createSlice({
       state.lastFetched = new Date().toISOString();
 
       // Merge agents from API with existing state (don't replace)
-      action.payload.forEach((agent) => {
-        state.byId[agent.id] = agent;
-        if (!state.allIds.includes(agent.id)) {
-          state.allIds.push(agent.id);
-        }
-      });
+      if (Array.isArray(action.payload)) {
+        action.payload.forEach((agent) => {
+          state.byId[agent.id] = agent;
+          if (!state.allIds.includes(agent.id)) {
+            state.allIds.push(agent.id);
+          }
+        });
+      }
 
       // DON'T remove agents that aren't in backend response!
       // This prevents race condition where fetchAgents() runs before

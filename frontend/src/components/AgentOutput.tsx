@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useSelector, shallowEqual } from 'react-redux';
 import { selectors } from '@/store/store';
 import type { RootState } from '@/store/store';
 import type { AgentMessage } from '@headless-agent-manager/client';
+
+// Constant empty array to avoid creating new references
+const EMPTY_MESSAGES: AgentMessage[] = [];
 
 interface AgentOutputProps {
   agentId: string | null;
@@ -14,16 +17,21 @@ export function AgentOutput({ agentId }: AgentOutputProps) {
   const [showRawOnHover, setShowRawOnHover] = useState(false);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
 
-  const messages = useSelector((state: RootState) =>
-    agentId ? selectors.selectMessagesForAgent(state, agentId) : []
+  // Use shallowEqual to prevent rerenders when array contents are the same
+  const messages = useSelector(
+    (state: RootState) =>
+      agentId ? selectors.selectMessagesForAgent(state, agentId) : EMPTY_MESSAGES,
+    shallowEqual
   );
 
-  const loading = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
+  const loading = useSelector(
+    (state: RootState) =>
+      agentId ? state.messages.byAgentId[agentId]?.loading ?? false : false
   );
 
-  const error = useSelector((state: RootState) =>
-    agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
+  const error = useSelector(
+    (state: RootState) =>
+      agentId ? state.messages.byAgentId[agentId]?.error ?? null : null
   );
 
   // Auto-scroll to bottom when new messages arrive

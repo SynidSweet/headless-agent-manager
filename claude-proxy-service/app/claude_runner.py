@@ -195,6 +195,16 @@ class ClaudeRunner:
             if options.get("mcp_strict", False):
                 parts.append("--strict-mcp-config")
 
+        # Add allowed tools if provided
+        if "allowed_tools" in options and options["allowed_tools"]:
+            tools_list = ",".join(options["allowed_tools"])
+            parts.extend(["--allowed-tools", tools_list])
+
+        # Add disallowed tools if provided
+        if "disallowed_tools" in options and options["disallowed_tools"]:
+            tools_list = ",".join(options["disallowed_tools"])
+            parts.extend(["--disallowed-tools", tools_list])
+
         return " ".join(parts)
 
     def _prepare_environment(self) -> Dict[str, str]:

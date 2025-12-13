@@ -1,0 +1,90 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e5]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: CS
+        - generic [ref=e10]:
+          - heading "CodeStream" [level=1] [ref=e11]
+          - paragraph [ref=e12]: AI Agent Console
+      - generic [ref=e14]:
+        - heading "Launch New Agent (v2.0)" [level=2] [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: "Agent Type:"
+            - combobox "Agent Type:" [ref=e19]:
+              - option "Claude Code" [selected]
+              - option "Gemini CLI"
+          - generic [ref=e20]:
+            - generic [ref=e21]: "Model:"
+            - combobox "Model:" [ref=e22]:
+              - option "Default (Claude Sonnet 4.5)" [selected]
+              - option "Claude Sonnet 4.5 - Best model for complex agents and coding tasks with optimal balance of intelligence, speed, and cost (medium)"
+              - option "Claude Opus 4.5 - Most intelligent model with 80.9% SWE-bench score, best for complex reasoning (high)"
+              - option "Claude Haiku 4.5 - Fastest model with near-frontier performance, optimized for high-volume tasks (low)"
+          - generic [ref=e23]:
+            - generic [ref=e24]: "Prompt:"
+            - textbox "Prompt:" [ref=e25]:
+              - /placeholder: Enter your prompt for the agent...
+          - generic [ref=e26]:
+            - generic [ref=e27]: "Working Directory:"
+            - textbox "Working Directory:" [ref=e28]:
+              - /placeholder: /path/to/project (optional)
+          - generic [ref=e29]:
+            - generic [ref=e30]: "Conversation Name (Optional):"
+            - textbox "Conversation Name (Optional):" [ref=e31]:
+              - /placeholder: e.g., Fix login bug, Add dark mode
+            - generic [ref=e32]: Max 100 characters. Helps organize your agent history.
+          - button "Launch Agent" [ref=e33] [cursor=pointer]
+      - generic [ref=e34]:
+        - heading "Active Agents (0)" [level=3] [ref=e35]
+        - paragraph [ref=e36]: No active agents
+      - generic [ref=e37]:
+        - heading "Historic Agents (1)" [level=3] [ref=e38]
+        - 'button "Execute: echo \"PERSISTENCE_TES..." [ref=e39]':
+          - paragraph [ref=e42]: "Execute: echo \"PERSISTENCE_TES..."
+      - generic [ref=e46]: Connected
+  - main [ref=e47]:
+    - generic [ref=e49]:
+      - 'heading "Execute: echo \"PERSISTENCE_TEST_123\"" [level=2] [ref=e50]'
+      - generic [ref=e51]: Completed
+    - generic [ref=e52]:
+      - generic [ref=e54] [cursor=pointer]:
+        - checkbox "Show Raw JSON" [ref=e55]
+        - generic [ref=e56]: Show Raw JSON
+      - generic [ref=e58]:
+        - generic [ref=e60]:
+          - text: 01:14:18
+          - generic [ref=e61]: "[user]"
+          - text: "Execute: echo \"PERSISTENCE_TEST_123\""
+        - generic [ref=e63]:
+          - text: 01:14:20
+          - generic [ref=e64]: "[system]"
+        - generic [ref=e66]:
+          - text: 01:14:22
+          - generic [ref=e67]: "[assistant]"
+          - text: I'll execute the echo command for you.
+        - generic [ref=e69]:
+          - text: 01:14:23
+          - generic [ref=e70]: "[tool]"
+          - text: "[Bash] Echo test string $ echo PERSISTENCE_TEST_123"
+        - generic [ref=e72]:
+          - text: 01:14:23
+          - generic [ref=e73]: "[system]"
+        - generic [ref=e75]:
+          - text: 01:14:23
+          - generic [ref=e76]: "[user]"
+          - text: "✓ Result: PERSISTENCE_TEST_123"
+        - generic [ref=e78]:
+          - text: 01:14:26
+          - generic [ref=e79]: "[assistant]"
+          - text: "The command executed successfully and output `PERSISTENCE_TEST_123`."
+        - generic [ref=e81]:
+          - text: 01:14:28
+          - generic [ref=e82]: "[system]"
+        - generic [ref=e84]:
+          - text: 01:14:28
+          - generic [ref=e85]: "[response]"
+```

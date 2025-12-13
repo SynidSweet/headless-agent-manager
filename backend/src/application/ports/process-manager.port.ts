@@ -8,6 +8,7 @@ export interface SpawnOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdio?: 'pipe' | 'ignore' | 'inherit';
+  shell?: boolean; // Whether to run command through shell (default: false)
 }
 
 /**

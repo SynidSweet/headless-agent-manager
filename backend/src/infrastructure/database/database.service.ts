@@ -113,4 +113,30 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const transaction = db.transaction(fn);
     return transaction(db);
   }
+
+  /**
+   * Truncate table (delete all rows)
+   * Useful for test cleanup
+   *
+   * @param tableName - Name of table to truncate
+   */
+  truncateTable(tableName: string): void {
+    const db = this.getDatabase();
+    db.prepare(`DELETE FROM ${tableName}`).run();
+  }
+
+  /**
+   * Count rows in table
+   * Useful for verification in tests
+   *
+   * @param tableName - Name of table to count
+   * @returns Number of rows in table
+   */
+  countTable(tableName: string): number {
+    const db = this.getDatabase();
+    const result = db.prepare(`SELECT COUNT(*) as count FROM ${tableName}`).get() as {
+      count: number;
+    };
+    return result.count;
+  }
 }

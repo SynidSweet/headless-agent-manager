@@ -1,0 +1,65 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e5]:
+  - complementary [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: CS
+        - generic [ref=e10]:
+          - heading "CodeStream" [level=1] [ref=e11]
+          - paragraph [ref=e12]: AI Agent Console
+      - generic [ref=e14]:
+        - heading "Launch New Agent (v2.0)" [level=2] [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: "Agent Type:"
+            - combobox "Agent Type:" [ref=e19]:
+              - option "Claude Code" [selected]
+              - option "Gemini CLI"
+          - generic [ref=e20]:
+            - generic [ref=e21]: "Model:"
+            - combobox "Model:" [ref=e22]:
+              - option "Default (Sonnet 4.5)" [selected]
+              - option "Sonnet 4.5 (Best for coding)"
+              - option "Opus 4.5 (Most intelligent)"
+              - option "Haiku 4.5 (Fastest)"
+          - generic [ref=e23]:
+            - generic [ref=e24]: "Prompt:"
+            - textbox "Prompt:" [ref=e25]:
+              - /placeholder: Enter your prompt for the agent...
+          - generic [ref=e26]:
+            - generic [ref=e27]: "Working Directory:"
+            - textbox "Working Directory:" [ref=e28]:
+              - /placeholder: /path/to/project (optional)
+          - generic [ref=e29]:
+            - generic [ref=e30]: "Conversation Name (Optional):"
+            - textbox "Conversation Name (Optional):" [ref=e31]:
+              - /placeholder: e.g., Fix login bug, Add dark mode
+            - generic [ref=e32]: Max 100 characters. Helps organize your agent history.
+          - button "Launch Agent" [ref=e33] [cursor=pointer]
+      - generic [ref=e34]:
+        - heading "Active Agents (4)" [level=3] [ref=e35]
+        - button "Count to 5 and exit" [ref=e36]:
+          - paragraph [ref=e40]: Count to 5 and exit
+        - button "Say hello and exit" [ref=e41]:
+          - paragraph [ref=e45]: Say hello and exit
+        - button "Count to 5 and exit" [ref=e46]:
+          - paragraph [ref=e50]: Count to 5 and exit
+        - button "Say hello and exit" [ref=e51]:
+          - paragraph [ref=e55]: Say hello and exit
+      - generic [ref=e56]:
+        - heading "Historic Agents (4)" [level=3] [ref=e57]
+        - button "Count to 5 and exit" [ref=e58]:
+          - paragraph [ref=e61]: Count to 5 and exit
+        - button "Say hello and exit" [ref=e62]:
+          - paragraph [ref=e65]: Say hello and exit
+        - button "Say hello and exit immediately" [ref=e66]:
+          - paragraph [ref=e69]: Say hello and exit immediately
+        - 'button "Run: echo test" [ref=e70]':
+          - paragraph [ref=e73]: "Run: echo test"
+  - main [ref=e74]:
+    - generic [ref=e76]:
+      - generic [ref=e77]: terminal
+      - paragraph [ref=e78]: Select an agent or start a new one
+```

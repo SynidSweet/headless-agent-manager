@@ -24,7 +24,7 @@ import { IInstanceLockManager } from '@application/ports/instance-lock-manager.p
  */
 describe('Process Management E2E', () => {
   let app: INestApplication;
-  const testPort = 3001; // Use different port for E2E tests
+  const testPort = 0; // Use port 0 to let the system assign a free port dynamically
   const testPidPath = path.join(process.cwd(), 'data/e2e-test.pid');
   let lifecycle: ApplicationLifecycleService;
   let lockManager: IInstanceLockManager;
@@ -93,6 +93,10 @@ describe('Process Management E2E', () => {
     if (fs.existsSync(testPidPath)) {
       fs.unlinkSync(testPidPath);
     }
+
+    // Wait longer for all async operations to complete (prevents "Cannot log after tests are done")
+    // This gives time for SSE streams to fully abort and cleanup
+    await new Promise((resolve) => setTimeout(resolve, 200));
   });
 
   /**

@@ -58,7 +58,9 @@ describe('IAgentRunner Contract', () => {
     repository = new SqliteAgentRepository(db);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for any pending async operations to complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
     db.close();
   });
 
@@ -251,10 +253,10 @@ describe('IAgentRunner Contract', () => {
 
         const messages: AgentMessage[] = [];
         const observer: IAgentObserver = {
-          onMessage: (msg) => messages.push(msg),
-          onStatusChange: () => {},
-          onError: () => {},
-          onComplete: () => {},
+          onMessage: async (msg) => { messages.push(msg); },
+          onStatusChange: async () => {},
+          onError: async () => {},
+          onComplete: async () => {},
         };
 
         // Act - Subscribe and wait for messages
@@ -309,12 +311,12 @@ describe('IAgentRunner Contract', () => {
 
         let messageReceived = false;
         const observer: IAgentObserver = {
-          onMessage: () => {
+          onMessage: async () => {
             messageReceived = true;
           },
-          onStatusChange: () => {},
-          onError: () => {},
-          onComplete: () => {},
+          onStatusChange: async () => {},
+          onError: async () => {},
+          onComplete: async () => {},
         };
 
         // Act
@@ -384,21 +386,21 @@ describe('IAgentRunner Contract', () => {
       let observer2Called = false;
 
       const observer1: IAgentObserver = {
-        onMessage: () => {
+        onMessage: async () => {
           observer1Called = true;
         },
-        onStatusChange: () => {},
-        onError: () => {},
-        onComplete: () => {},
+        onStatusChange: async () => {},
+        onError: async () => {},
+        onComplete: async () => {},
       };
 
       const observer2: IAgentObserver = {
-        onMessage: () => {
+        onMessage: async () => {
           observer2Called = true;
         },
-        onStatusChange: () => {},
-        onError: () => {},
-        onComplete: () => {},
+        onStatusChange: async () => {},
+        onError: async () => {},
+        onComplete: async () => {},
       };
 
       // Subscribe both observers

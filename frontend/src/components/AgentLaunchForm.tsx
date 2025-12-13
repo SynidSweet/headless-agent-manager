@@ -1,13 +1,19 @@
-import { useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useState, useEffect } from 'react';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
 import type { AgentType, LaunchAgentRequest } from '@headless-agent-manager/client';
-import { actions } from '@/store/store';
-import type { AppDispatch } from '@/store/store';
+import { actions, selectors } from '@/store/store';
+import type { AppDispatch, RootState } from '@/store/store';
 import { useDesignTokens } from '@/hooks/useDesignTokens';
 
 export function AgentLaunchForm() {
   const tokens = useDesignTokens();
   const dispatch = useDispatch<AppDispatch>();
+
+  // Fetch providers from backend
+  const providers = useSelector(selectors.selectAllProviders, shallowEqual);
+  const providersLoading = useSelector(selectors.selectProvidersLoading);
+  const providersError = useSelector(selectors.selectProvidersError);
+
   const [type, setType] = useState<AgentType>('claude-code');
   const [prompt, setPrompt] = useState('');
   const [workingDirectory, setWorkingDirectory] = useState('');
@@ -16,6 +22,28 @@ export function AgentLaunchForm() {
   const [isLaunching, setIsLaunching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
+
+  // Get models for selected provider (use shallowEqual to prevent rerenders)
+  const models = useSelector(
+    (state: RootState) => selectors.selectModelsForProvider(state, type),
+    shallowEqual
+  );
+
+  const defaultModel = useSelector(
+    (state: RootState) => selectors.selectDefaultModel(state, type)
+  );
+
+  // Fetch providers on mount
+  useEffect(() => {
+    dispatch(actions.fetchProviders());
+  }, [dispatch]);
+
+  // Reset model to default when provider type changes
+  useEffect(() => {
+    if (defaultModel) {
+      setModel('default');
+    }
+  }, [type, defaultModel]);
 
   const validateConversationName = (value: string): boolean => {
     if (value && value.trim().length === 0) {
@@ -120,6 +148,7 @@ export function AgentLaunchForm() {
             id="agent-type"
             value={type}
             onChange={(e) => setType(e.target.value as AgentType)}
+            disabled={isLaunching || providersLoading}
             style={{
               padding: tokens.spacing.sm,
               fontSize: tokens.typography.fontSize.md,
@@ -129,8 +158,17 @@ export function AgentLaunchForm() {
               color: tokens.colors.text,
             }}
           >
-            <option value="claude-code">Claude Code</option>
-            <option value="gemini-cli">Gemini CLI</option>
+            {providersLoading ? (
+              <option>Loading providers...</option>
+            ) : providers.length === 0 ? (
+              <option>No providers available</option>
+            ) : (
+              providers.map((provider) => (
+                <option key={provider.type} value={provider.type}>
+                  {provider.name} {!provider.isAvailable && '(Unavailable)'}
+                </option>
+              ))
+            )}
           </select>
         </div>
 
@@ -155,6 +193,7 @@ export function AgentLaunchForm() {
             id="model"
             value={model}
             onChange={(e) => setModel(e.target.value)}
+            disabled={isLaunching || providersLoading || models.length === 0}
             style={{
               padding: tokens.spacing.sm,
               fontSize: tokens.typography.fontSize.md,
@@ -163,12 +202,27 @@ export function AgentLaunchForm() {
               backgroundColor: tokens.colors.background,
               color: tokens.colors.text,
             }}
-            disabled={isLaunching}
           >
-            <option value="default">Default (Sonnet 4.5)</option>
-            <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Best for coding)</option>
-            <option value="claude-opus-4-5-20251101">Opus 4.5 (Most intelligent)</option>
-            <option value="claude-haiku-4-5-20251001">Haiku 4.5 (Fastest)</option>
+            {providersLoading ? (
+              <option>Loading models...</option>
+            ) : models.length === 0 ? (
+              <option>No models available</option>
+            ) : (
+              <>
+                {defaultModel && (
+                  <option value="default">
+                    Default ({defaultModel.name})
+                  </option>
+                )}
+                {models.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} - {m.description}
+                    {m.costTier && ` (${m.costTier})`}
+                    {!m.isAvailable && ' (Unavailable)'}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
         </div>
 
@@ -299,6 +353,20 @@ export function AgentLaunchForm() {
             Max 100 characters. Helps organize your agent history.
           </small>
         </div>
+
+        {providersError && (
+          <div
+            style={{
+              padding: tokens.spacing.md,
+              backgroundColor: '#ffebee',
+              color: tokens.colors.danger,
+              borderRadius: tokens.borderRadius.sm,
+              fontSize: tokens.typography.fontSize.md,
+            }}
+          >
+            Failed to load providers: {providersError}
+          </div>
+        )}
 
         {error && (
           <div

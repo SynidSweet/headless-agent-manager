@@ -36,9 +36,18 @@ let env: any;
 
 test.beforeAll(async () => {
   env = await setupFullStackTest();
+
+  // Skip all tests in this file if Python proxy not available
+  if (!env.pythonProxyAvailable) {
+    console.log('\n⚠️  Python proxy not available - skipping all tests in streaming-deduplication.spec.ts');
+    console.log('   Start service: cd claude-proxy-service && uvicorn app.main:app --reload\n');
+  }
 });
 
 test.beforeEach(async () => {
+  // Skip if Python proxy not available
+  test.skip(!env.pythonProxyAvailable, 'Requires Python proxy service on port 8000');
+
   await cleanupAgents(env.backendUrl);
 });
 
@@ -163,7 +172,8 @@ test.describe('Streaming Deduplication (Real Claude CLI)', () => {
     await page.waitForTimeout(2000);
 
     // Find all assistant messages in the DOM
-    const uiMessages = page.locator('[data-message-type="assistant"]');
+    // Since data-message-type doesn't exist, we count messages containing [assistant] tag
+    const uiMessages = page.locator('[data-message-id]:has-text("[assistant]")');
     const uiMessageCount = await uiMessages.count();
 
     console.log(`   UI shows ${uiMessageCount} assistant messages`);
@@ -278,7 +288,8 @@ test.describe('Streaming Deduplication (Real Claude CLI)', () => {
     await page.waitForTimeout(2000);
 
     // Get all assistant messages
-    const uiMessages = page.locator('[data-message-type="assistant"]');
+    // Since data-message-type doesn't exist, we count messages containing [assistant] tag
+    const uiMessages = page.locator('[data-message-id]:has-text("[assistant]")');
     const uiMessageCount = await uiMessages.count();
 
     console.log(`   UI shows ${uiMessageCount} assistant messages`);

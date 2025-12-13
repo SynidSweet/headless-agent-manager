@@ -480,6 +480,78 @@ describe('ClaudeMessageParser', () => {
       });
     });
 
+    describe('stream_event with input_json_delta', () => {
+      it('should parse content_block_delta with input_json_delta (not throw error)', () => {
+        const line = JSON.stringify({
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: {
+              type: 'input_json_delta',
+              partial_json: '{"command": "echo E2E_TEST_MARKER_12345"}',
+            },
+          },
+          session_id: 'test-session',
+          parent_tool_use_id: null,
+          uuid: 'test-uuid',
+        });
+
+        // Should not throw error
+        const result = parser.parse(line);
+
+        // Result can be null (skipped) or a valid message, but should NOT throw
+        if (result !== null) {
+          expect(result).toBeDefined();
+          expect(['assistant', 'tool', 'system']).toContain(result.type);
+        }
+      });
+
+      it('should handle empty partial_json in input_json_delta', () => {
+        const line = JSON.stringify({
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: {
+              type: 'input_json_delta',
+              partial_json: '',
+            },
+          },
+          session_id: 'test-session',
+        });
+
+        // Should not throw
+        const result = parser.parse(line);
+
+        // Can be null or valid message
+        if (result !== null) {
+          expect(result).toBeDefined();
+        }
+      });
+
+      it('should handle input_json_delta with complex partial JSON', () => {
+        const line = JSON.stringify({
+          type: 'stream_event',
+          event: {
+            type: 'content_block_delta',
+            index: 0,
+            delta: {
+              type: 'input_json_delta',
+              partial_json: '{"file_path": "/test/path.txt", "content": "test',
+            },
+          },
+        });
+
+        // Should not throw even with incomplete JSON
+        const result = parser.parse(line);
+
+        if (result !== null) {
+          expect(result).toBeDefined();
+        }
+      });
+    });
+
     describe('tool message with description', () => {
       it('should format Bash tool with description on first line', () => {
         const line =

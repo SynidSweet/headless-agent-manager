@@ -10,6 +10,7 @@ import type {
   LaunchAgentRequest,
   LaunchAgentResponse,
   AgentClientConfig,
+  ProvidersResponse,
 } from '../types';
 
 /**
@@ -115,6 +116,23 @@ class AgentApiClientClass {
         `Failed to terminate agent: ${response.status} ${response.statusText}`
       );
     }
+  }
+
+  /**
+   * Get all available providers with their models and capabilities
+   */
+  async getProviders(): Promise<ProvidersResponse> {
+    const response = await this.fetch('/api/providers', {
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch providers: ${response.status} ${response.statusText}`
+      );
+    }
+
+    return response.json() as Promise<ProvidersResponse>;
   }
 
   /**

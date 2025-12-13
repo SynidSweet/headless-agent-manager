@@ -10,12 +10,14 @@ import { PidFileProcessManager } from '@infrastructure/process/pid-file-process-
 import { IFileSystem } from '@application/ports/filesystem.port';
 import { ProcessUtils } from '@infrastructure/process/process.utils';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 describe('PidFileProcessManager', () => {
   let manager: PidFileProcessManager;
   let mockFileSystem: jest.Mocked<IFileSystem>;
   let mockProcessUtils: jest.Mocked<ProcessUtils>;
   let mockLogger: jest.Mocked<Logger>;
+  let mockConfigService: jest.Mocked<ConfigService>;
 
   const testPidPath = '/test/backend.pid';
   const currentPid = process.pid;
@@ -63,6 +65,10 @@ describe('PidFileProcessManager', () => {
       debug: jest.fn(),
     } as any;
 
+    mockConfigService = {
+      get: jest.fn().mockReturnValue('3000'),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PidFileProcessManager,
@@ -81,6 +87,10 @@ describe('PidFileProcessManager', () => {
         {
           provide: 'ILogger',
           useValue: mockLogger,
+        },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
         },
       ],
     }).compile();

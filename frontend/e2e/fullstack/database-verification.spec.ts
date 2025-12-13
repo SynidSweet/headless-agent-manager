@@ -1,6 +1,7 @@
 import { test, expect, request } from '@playwright/test';
 import { setupFullStackTest, cleanupAgents } from './setup';
 import { waitForMessages } from './helpers/waitForMessages';
+import { waitForProvidersLoaded } from '../helpers/providerHelper';
 
 /**
  * PHASE 4: E2E DATABASE VERIFICATION TESTS
@@ -19,9 +20,18 @@ let env: any;
 
 test.beforeAll(async () => {
   env = await setupFullStackTest();
+
+  // Skip all tests in this file if Python proxy not available
+  if (!env.pythonProxyAvailable) {
+    console.log('\n⚠️  Python proxy not available - skipping all tests in database-verification.spec.ts');
+    console.log('   Start service: cd claude-proxy-service && uvicorn app.main:app --reload\n');
+  }
 });
 
 test.beforeEach(async ({ page }) => {
+  // Skip if Python proxy not available
+  test.skip(!env.pythonProxyAvailable, 'Requires Python proxy service on port 8000');
+
   await cleanupAgents(env.backendUrl);
 
   // Reload page to clear Redux state after database reset
@@ -45,7 +55,10 @@ test.describe('E2E Database Verification', () => {
   test('messages displayed in UI are actually in database', async ({ page }) => {
     // Navigate to app
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch agent with simple prompt
     await page.selectOption('select#agent-type', 'claude-code');
@@ -55,7 +68,7 @@ test.describe('E2E Database Verification', () => {
     const [launchResponse] = await Promise.all([
       page.waitForResponse(
         (resp) => resp.url().includes('/api/agents') && resp.request().method() === 'POST',
-        { timeout: 10000 }
+        { timeout: 15000 }
       ),
       page.click('button:has-text("Launch Agent")'),
     ]);
@@ -65,8 +78,8 @@ test.describe('E2E Database Verification', () => {
 
     console.log('✅ Agent launched:', agentId);
 
-    // Wait for agent to appear in UI
-    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 10000 });
+    // Wait for agent to appear in UI (increased timeout)
+    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 20000 });
 
     // Get agent element
     const agentElement = page.locator(`[data-agent-id="${agentId}"]`);
@@ -87,7 +100,7 @@ test.describe('E2E Database Verification', () => {
     });
 
     // Count messages in UI
-    const uiMessageCount = await page.locator('[data-message-type]').count();
+    const uiMessageCount = await page.locator('[data-message-id]').count();
     console.log(`✅ UI shows ${uiMessageCount} messages`);
 
     // Query backend API directly for messages
@@ -138,6 +151,10 @@ test.describe('E2E Database Verification', () => {
 
     // Launch agent
     await page.goto(env.frontendUrl);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Count to 5');
 
@@ -180,13 +197,17 @@ test.describe('E2E Database Verification', () => {
   test('messages persist and reload correctly after page refresh', async ({ page }) => {
     // Launch agent
     await page.goto(env.frontendUrl);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Say hello');
 
     const [launchResponse] = await Promise.all([
       page.waitForResponse(
         (resp) => resp.url().includes('/api/agents') && resp.request().method() === 'POST',
-        { timeout: 10000 }
+        { timeout: 15000 }
       ),
       page.click('button:has-text("Launch Agent")'),
     ]);
@@ -197,7 +218,7 @@ test.describe('E2E Database Verification', () => {
     console.log('✅ Agent launched:', agentId);
 
     // Wait for agent to appear in UI
-    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 10000 });
+    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 20000 });
 
     // Get agent element
     const agentElement = page.locator(`[data-agent-id="${agentId}"]`);
@@ -218,12 +239,12 @@ test.describe('E2E Database Verification', () => {
     console.log('✅ Page reloaded');
 
     // Click agent to view messages again
-    await page.waitForSelector('[data-agent-id]', { timeout: 10000 });
+    await page.waitForSelector('[data-agent-id]', { timeout: 15000 });
     await page.click(`[data-agent-id="${agentId}"]`);
 
     // Messages should reload from database
-    await page.waitForSelector('[data-message-type]', { timeout: 10000 });
-    const reloadedMessageCount = await page.locator('[data-message-type]').count();
+    await page.waitForSelector('[data-message-id]', { timeout: 15000 });
+    const reloadedMessageCount = await page.locator('[data-message-id]').count();
 
     console.log(`✅ After reload UI has ${reloadedMessageCount} messages`);
 
@@ -240,13 +261,17 @@ test.describe('E2E Database Verification', () => {
   test('deleting agent cascades to remove all messages', async ({ page }) => {
     // Launch agent
     await page.goto(env.frontendUrl);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Test cleanup');
 
     const [launchResponse] = await Promise.all([
       page.waitForResponse(
         (resp) => resp.url().includes('/api/agents') && resp.request().method() === 'POST',
-        { timeout: 10000 }
+        { timeout: 15000 }
       ),
       page.click('button:has-text("Launch Agent")'),
     ]);
@@ -257,7 +282,7 @@ test.describe('E2E Database Verification', () => {
     console.log('✅ Agent ID:', agentId);
 
     // Wait for agent to appear in UI
-    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 10000 });
+    await page.waitForSelector(`[data-agent-id="${agentId}"]`, { timeout: 20000 });
 
     // Get agent element and click to view messages
     const agentElement = page.locator(`[data-agent-id="${agentId}"]`);

@@ -279,6 +279,127 @@ describe('DatabaseService', () => {
     });
   });
 
+  describe('Test Utilities (truncateTable)', () => {
+    it('should truncate table and remove all data', () => {
+      // Arrange
+      const db = new DatabaseService(':memory:');
+      db.onModuleInit();
+
+      // Insert test data
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('test-1', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('test-2', 'synthetic', 'terminated', 'test', '{}', new Date().toISOString());
+
+      // Verify data exists
+      const beforeCount = db
+        .getDatabase()
+        .prepare('SELECT COUNT(*) as count FROM agents')
+        .get() as { count: number };
+      expect(beforeCount.count).toBe(2);
+
+      // Act
+      db.truncateTable('agents');
+
+      // Assert
+      const afterCount = db
+        .getDatabase()
+        .prepare('SELECT COUNT(*) as count FROM agents')
+        .get() as { count: number };
+      expect(afterCount.count).toBe(0);
+
+      // Cleanup
+      db.close();
+    });
+
+    it('should truncate multiple tables independently', () => {
+      // Arrange
+      const db = new DatabaseService(':memory:');
+      db.onModuleInit();
+
+      // Insert data in both tables
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('agent-1', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
+
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agent_messages (id, agent_id, sequence_number, type, content, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('msg-1', 'agent-1', 1, 'message', 'test', new Date().toISOString());
+
+      // Act - Truncate only messages
+      db.truncateTable('agent_messages');
+
+      // Assert
+      const agentCount = db
+        .getDatabase()
+        .prepare('SELECT COUNT(*) as count FROM agents')
+        .get() as { count: number };
+      const messageCount = db
+        .getDatabase()
+        .prepare('SELECT COUNT(*) as count FROM agent_messages')
+        .get() as { count: number };
+
+      expect(agentCount.count).toBe(1); // Agents still there
+      expect(messageCount.count).toBe(0); // Messages deleted
+
+      // Cleanup
+      db.close();
+    });
+
+    it('should handle truncating empty table', () => {
+      // Arrange
+      const db = new DatabaseService(':memory:');
+      db.onModuleInit();
+
+      // Act & Assert - Should not throw
+      expect(() => db.truncateTable('agents')).not.toThrow();
+
+      // Cleanup
+      db.close();
+    });
+
+    it('should count table rows correctly', () => {
+      // Arrange
+      const db = new DatabaseService(':memory:');
+      db.onModuleInit();
+
+      // Act - Empty table
+      const emptyCount = db.countTable('agents');
+      expect(emptyCount).toBe(0);
+
+      // Insert data
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('test-1', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
+      db.getDatabase()
+        .prepare(
+          'INSERT INTO agents (id, type, status, prompt, configuration, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        )
+        .run('test-2', 'synthetic', 'running', 'test', '{}', new Date().toISOString());
+
+      // Act - With data
+      const populatedCount = db.countTable('agents');
+
+      // Assert
+      expect(populatedCount).toBe(2);
+
+      // Cleanup
+      db.close();
+    });
+  });
+
   describe('Transactions', () => {
     it('should execute function in transaction', () => {
       // Arrange

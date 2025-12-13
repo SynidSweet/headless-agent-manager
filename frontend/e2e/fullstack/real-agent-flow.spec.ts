@@ -1,5 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { setupFullStackTest, cleanupAgents } from './setup';
+import { waitForProvidersLoaded } from '../helpers/providerHelper';
 
 /**
  * FULL-STACK INTEGRATION TESTS (REAL CLAUDE CLI)
@@ -26,9 +27,18 @@ let env: any;
 
 test.beforeAll(async () => {
   env = await setupFullStackTest();
+
+  // Skip all tests in this file if Python proxy not available
+  if (!env.pythonProxyAvailable) {
+    console.log('\n⚠️  Python proxy not available - skipping all tests in real-agent-flow.spec.ts');
+    console.log('   Start service: cd claude-proxy-service && uvicorn app.main:app --reload\n');
+  }
 });
 
 test.beforeEach(async () => {
+  // Skip if Python proxy not available
+  test.skip(!env.pythonProxyAvailable, 'Requires Python proxy service on port 8000');
+
   await cleanupAgents(env.backendUrl);
 });
 
@@ -51,9 +61,12 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
 
     // STEP 1: Navigate to app
     await page.goto(env.frontendUrl);
-    await expect(page.locator('h1')).toContainText('Agent Manager', { timeout: 10000 });
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
 
     console.log('✅ Step 1: Page loaded');
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // STEP 2: Fill launch form with simple prompt
     await page.selectOption('select#agent-type', 'claude-code');
@@ -92,9 +105,9 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
     console.log('✅ Step 5: Agent clicked');
 
     // STEP 6: CRITICAL - Wait for messages to appear in DOM
-    // Use multiple possible selectors to find messages
+    // Use multiple possible selectors to find messages (increased timeout for agent response)
     const messageSelectors = [
-      '[data-message-type]',
+      '[data-message-id]',
       '.message',
       '[data-testid="message"]',
       'text=FULLSTACK_TEST_PASS',
@@ -106,7 +119,7 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
 
     for (const selector of messageSelectors) {
       try {
-        await page.waitForSelector(selector, { timeout: 40000 });
+        await page.waitForSelector(selector, { timeout: 60000 }); // Increased to 60s
         messagesFound = true;
         foundSelector = selector;
         console.log(`✅ Step 6: Messages found with selector: ${selector}`);
@@ -161,15 +174,18 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
     await page.goto(env.frontendUrl);
     await expect(page.locator('h1')).toBeVisible();
 
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Say "test" and nothing else');
     await page.click('button:has-text("Launch Agent")');
 
     // Wait for agent card
-    await expect(page.locator('[data-agent-id]').first()).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[data-agent-id]').first()).toBeVisible({ timeout: 15000 });
 
-    // Wait for WebSocket messages
-    await page.waitForTimeout(30000); // Wait for Claude to respond
+    // Wait for WebSocket messages (increased timeout for Claude response)
+    await page.waitForTimeout(45000); // Wait for Claude to respond
 
     // Verify we received WebSocket messages
     expect(wsMessages.length).toBeGreaterThan(0);
@@ -198,6 +214,9 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
   test('should show agent status changes in real-time', async ({ page }) => {
     await page.goto(env.frontendUrl);
 
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Say "status test"');
@@ -205,7 +224,7 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
 
     // Wait for agent card
     const agentCard = page.locator('[data-agent-id]').first();
-    await expect(agentCard).toBeVisible({ timeout: 10000 });
+    await expect(agentCard).toBeVisible({ timeout: 15000 });
 
     // Should show some status (initializing/running/completed)
     const hasStatus = await agentCard.locator('text=/initializing|running|completed/i').count();
@@ -220,22 +239,25 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
   test('should handle agent termination', async ({ page }) => {
     await page.goto(env.frontendUrl);
 
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     // Launch agent with longer task
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Count from 1 to 10');
     await page.click('button:has-text("Launch Agent")');
 
     const agentCard = page.locator('[data-agent-id]').first();
-    await expect(agentCard).toBeVisible({ timeout: 10000 });
+    await expect(agentCard).toBeVisible({ timeout: 15000 });
 
-    // Try to find and click terminate button
-    const terminateButton = agentCard.locator('button:has-text("Terminate"), button:has-text("Stop")');
+    // Try to find and click terminate button (actual button text is "Stop Agent" from App.tsx:77)
+    const terminateButton = agentCard.locator('button:has-text("Terminate"), button:has-text("Stop Agent"), button:has-text("Stop")');
 
     if (await terminateButton.count() > 0) {
       await terminateButton.first().click();
 
       // Should show terminated/stopped status or be removed
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(3000);
 
       console.log('✅ Termination working');
     } else {
@@ -248,6 +270,9 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
    */
   test('should handle multiple agents simultaneously', async ({ page }) => {
     await page.goto(env.frontendUrl);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch first agent
     await page.selectOption('select#agent-type', 'claude-code');
@@ -262,7 +287,7 @@ test.describe('Full-Stack Agent Message Flow (REAL CLAUDE)', () => {
     await page.click('button:has-text("Launch Agent")');
 
     // Should have 2 agent cards
-    await expect(page.locator('[data-agent-id]')).toHaveCount(2, { timeout: 10000 });
+    await expect(page.locator('[data-agent-id]')).toHaveCount(2, { timeout: 15000 });
 
     console.log('✅ Multiple agents working');
   });
@@ -307,12 +332,16 @@ test.describe('Full-Stack Diagnostics', () => {
 
     // Run test
     await page.goto(env.frontendUrl);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Say "diagnostic"');
     await page.click('button:has-text("Launch Agent")');
 
-    // Wait for processing
-    await page.waitForTimeout(35000);
+    // Wait for processing (increased timeout for Claude response)
+    await page.waitForTimeout(50000);
 
     // Take screenshot
     await page.screenshot({ path: 'diagnostic-screenshot.png', fullPage: true });

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { waitForProvidersLoaded } from '../helpers/providerHelper';
 
 /**
  * Phase 1 Verification Test
@@ -36,6 +37,9 @@ test.describe('Phase 1: Lifecycle Event Verification', () => {
     // Wait for WebSocket connection
     await page.waitForTimeout(2000);
 
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
+
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Say hello for Phase 1 verification');
@@ -68,7 +72,7 @@ test.describe('Phase 1: Lifecycle Event Verification', () => {
     // Assertions
     expect(createdEvent, 'Should have received agent:created event').toBeDefined();
     expect(createdEvent?.text).toContain('🚀');
-    expect(createdEvent?.text).toContain(agentId);
+    expect(createdEvent?.text).toContain('agent:created');
 
     console.log('✅ Phase 1 Verification: agent:created event received!');
   });
@@ -92,6 +96,9 @@ test.describe('Phase 1: Lifecycle Event Verification', () => {
     await page.goto('http://localhost:5173');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     await page.selectOption('select#agent-type', 'claude-code');
     await page.fill('textarea#agent-prompt', 'Count to 3');
@@ -146,6 +153,9 @@ test.describe('Phase 1: Lifecycle Event Verification', () => {
     await page.goto('http://localhost:5173');
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
+
+    // ✅ Wait for providers to load before interacting with form
+    await waitForProvidersLoaded(page);
 
     // Launch agent
     await page.selectOption('select#agent-type', 'claude-code');

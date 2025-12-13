@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AgentController } from '@presentation/controllers/agent.controller';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import { AgentMessageService } from '@application/services/agent-message.service';
+import { StreamingService } from '@application/services/streaming.service';
 import { AgentGateway } from '@application/gateways/agent.gateway';
 import { Agent } from '@domain/entities/agent.entity';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
@@ -37,6 +38,29 @@ describe('AgentController', () => {
       emitToAll: jest.fn(),
       emitToClient: jest.fn(),
       emitToRoom: jest.fn(),
+      cleanupAgentRooms: jest.fn().mockResolvedValue(undefined),
+    };
+
+    // Mock StreamingService (required for cleanup)
+    const mockStreamingService = {
+      unsubscribeAllForAgent: jest.fn(),
+      subscribeToAgent: jest.fn(),
+      unsubscribeFromAgent: jest.fn(),
+      broadcastMessage: jest.fn(),
+      broadcastStatusChange: jest.fn(),
+      broadcastError: jest.fn(),
+      broadcastComplete: jest.fn(),
+    };
+
+    // Mock AgentRepository (required for delete operations)
+    const mockRepository = {
+      findById: jest.fn(),
+      delete: jest.fn(),
+      save: jest.fn(),
+      findAll: jest.fn(),
+      findByStatus: jest.fn(),
+      findByType: jest.fn(),
+      exists: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -53,6 +77,14 @@ describe('AgentController', () => {
         {
           provide: AgentGateway,
           useValue: mockGateway,
+        },
+        {
+          provide: StreamingService,
+          useValue: mockStreamingService,
+        },
+        {
+          provide: 'IAgentRepository',
+          useValue: mockRepository,
         },
       ],
     }).compile();
@@ -282,6 +314,117 @@ describe('AgentController', () => {
       await expect(controller.getAgentStatus(agentId.toString())).rejects.toThrow(
         NotFoundException
       );
+    });
+  });
+
+  describe('DELETE /api/agents/:id with force parameter', () => {
+    let mockRepository: any;
+
+    beforeEach(() => {
+      // Get the mock repository from the test module
+      mockRepository = (controller as any).agentRepository;
+    });
+
+    it('should delete running agent when force=true', async () => {
+      // Arrange: Create a running agent
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'test',
+        configuration: {},
+      });
+      agent.markAsRunning();
+
+      mockRepository.findById.mockResolvedValue(agent);
+      mockRepository.delete.mockResolvedValue(undefined);
+      orchestrationService.terminateAgent.mockResolvedValue(undefined);
+
+      // Act
+      const result = await controller.deleteAgent(agent.id.toString(), 'true');
+
+      // Assert
+      expect(result).toEqual({ success: true });
+      expect(orchestrationService.terminateAgent).toHaveBeenCalledWith(agent.id);
+      expect(mockRepository.delete).toHaveBeenCalledWith(agent.id);
+    });
+
+    it('should delete terminated agent when force=true', async () => {
+      // Arrange: Create a terminated agent
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'test',
+        configuration: {},
+      });
+      agent.markAsRunning();
+      agent.markAsTerminated();
+
+      mockRepository.findById.mockResolvedValue(agent);
+      mockRepository.delete.mockResolvedValue(undefined);
+
+      // Act
+      const result = await controller.deleteAgent(agent.id.toString(), 'true');
+
+      // Assert
+      expect(result).toEqual({ success: true });
+      expect(mockRepository.delete).toHaveBeenCalledWith(agent.id);
+    });
+
+    it('should ignore termination errors when force=true', async () => {
+      // Arrange: Agent that can't be terminated
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'test',
+        configuration: {},
+      });
+      agent.markAsRunning();
+
+      mockRepository.findById.mockResolvedValue(agent);
+      mockRepository.delete.mockResolvedValue(undefined);
+      orchestrationService.terminateAgent.mockRejectedValue(new Error('Process not found'));
+
+      // Act - Should NOT throw despite termination error
+      const result = await controller.deleteAgent(agent.id.toString(), 'true');
+
+      // Assert
+      expect(result).toEqual({ success: true });
+      expect(mockRepository.delete).toHaveBeenCalledWith(agent.id);
+    });
+
+    it('should reject deletion of running agent when force=false', async () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'test',
+        configuration: {},
+      });
+      agent.markAsRunning();
+
+      mockRepository.findById.mockResolvedValue(agent);
+
+      // Act & Assert
+      await expect(
+        controller.deleteAgent(agent.id.toString(), 'false')
+      ).rejects.toThrow('Cannot delete running agent');
+    });
+
+    it('should allow deletion of completed agent without force', async () => {
+      // Arrange
+      const agent = Agent.create({
+        type: AgentType.CLAUDE_CODE,
+        prompt: 'test',
+        configuration: {},
+      });
+      agent.markAsRunning();
+      agent.markAsCompleted();
+
+      mockRepository.findById.mockResolvedValue(agent);
+      mockRepository.delete.mockResolvedValue(undefined);
+
+      // Act
+      const result = await controller.deleteAgent(agent.id.toString());
+
+      // Assert
+      expect(result).toEqual({ success: true });
+      expect(mockRepository.delete).toHaveBeenCalledWith(agent.id);
     });
   });
 });

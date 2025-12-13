@@ -56,15 +56,15 @@ describe.skip('ClaudeCodeAdapter Integration (Real CLI - BLOCKED BY UPSTREAM BUG
       let completed = false;
 
       const observer: IAgentObserver = {
-        onMessage: (message: AgentMessage) => {
+        onMessage: async (message: AgentMessage) => {
           messages.push(message);
           console.log('[TEST] Message:', message.type, message.metadata?.subtype || '');
         },
-        onStatusChange: jest.fn(),
-        onError: (error) => {
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: async (error) => {
           console.log('[TEST] Error:', error.message);
         },
-        onComplete: (result) => {
+        onComplete: async (result) => {
           completed = true;
           console.log('[TEST] Completed:', result.status);
         },

@@ -9,8 +9,8 @@ import { AgentType } from '@domain/value-objects/agent-type.vo';
  */
 export class AgentFactoryAdapter implements IAgentFactory {
   constructor(
-    private readonly claudeAdapter: IAgentRunner
-    // Future: private readonly geminiCliAdapter: IAgentRunner
+    private readonly claudeAdapter: IAgentRunner,
+    private readonly geminiCliAdapter: IAgentRunner
   ) {}
 
   /**
@@ -22,8 +22,7 @@ export class AgentFactoryAdapter implements IAgentFactory {
         return this.claudeAdapter;
 
       case AgentType.GEMINI_CLI:
-        // TODO: Implement Gemini CLI adapter
-        throw new Error(`Agent type not supported: ${type}`);
+        return this.geminiCliAdapter;
 
       default:
         throw new Error(`Agent type not supported: ${type}`);

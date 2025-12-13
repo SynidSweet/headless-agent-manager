@@ -348,4 +348,84 @@ describe('AgentGateway', () => {
       expect(isConnected).toBe(false);
     });
   });
+
+  describe('cleanupAgentRooms', () => {
+    it('should remove all sockets from agent room', async () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const roomName = `agent:${agentId.toString()}`;
+
+      const mockSocket1 = { id: 'socket-1', leave: jest.fn() } as any;
+      const mockSocket2 = { id: 'socket-2', leave: jest.fn() } as any;
+
+      // Mock Socket.IO's in() and fetchSockets() methods
+      const mockFetchSockets = jest.fn().mockResolvedValue([mockSocket1, mockSocket2]);
+      mockServer.in = jest.fn().mockReturnValue({
+        fetchSockets: mockFetchSockets,
+      });
+
+      // Act
+      await gateway.cleanupAgentRooms(agentId);
+
+      // Assert
+      expect(mockServer.in).toHaveBeenCalledWith(roomName);
+      expect(mockFetchSockets).toHaveBeenCalled();
+      expect(mockSocket1.leave).toHaveBeenCalledWith(roomName);
+      expect(mockSocket2.leave).toHaveBeenCalledWith(roomName);
+    });
+
+    it('should handle empty room gracefully', async () => {
+      // Arrange
+      const agentId = AgentId.generate();
+
+      const mockFetchSockets = jest.fn().mockResolvedValue([]);
+      mockServer.in = jest.fn().mockReturnValue({
+        fetchSockets: mockFetchSockets,
+      });
+
+      // Act & Assert - Should not throw
+      await expect(gateway.cleanupAgentRooms(agentId)).resolves.not.toThrow();
+
+      // Should still call fetchSockets to check
+      expect(mockFetchSockets).toHaveBeenCalled();
+    });
+
+    it('should handle single socket in room', async () => {
+      // Arrange
+      const agentId = AgentId.generate();
+      const roomName = `agent:${agentId.toString()}`;
+
+      const mockSocket1 = { id: 'socket-1', leave: jest.fn() } as any;
+
+      mockServer.in = jest.fn().mockReturnValue({
+        fetchSockets: jest.fn().mockResolvedValue([mockSocket1]),
+      });
+
+      // Act
+      await gateway.cleanupAgentRooms(agentId);
+
+      // Assert
+      expect(mockSocket1.leave).toHaveBeenCalledWith(roomName);
+    });
+
+    it('should not affect other agent rooms', async () => {
+      // Arrange
+      const agent1 = AgentId.generate();
+      const room1 = `agent:${agent1.toString()}`;
+
+      const mockSocket1 = { id: 'socket-1', leave: jest.fn() } as any;
+
+      // Setup mock to return socket for agent1 room only
+      mockServer.in = jest.fn().mockReturnValue({
+        fetchSockets: jest.fn().mockResolvedValue([mockSocket1]),
+      }) as any;
+
+      // Act - Clean up agent1 only
+      await gateway.cleanupAgentRooms(agent1);
+
+      // Assert - Should only call in() for agent1's room
+      expect(mockServer.in).toHaveBeenCalledWith(room1);
+      expect(mockSocket1.leave).toHaveBeenCalledWith(room1);
+    });
+  });
 });

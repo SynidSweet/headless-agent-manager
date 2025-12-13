@@ -3,6 +3,12 @@
  * Runs before all tests
  */
 
+// Load environment variables from .env for smoke tests
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 // Extend Jest matchers if needed
 // import 'jest-extended';
 

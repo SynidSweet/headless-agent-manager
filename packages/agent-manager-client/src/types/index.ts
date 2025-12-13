@@ -122,3 +122,45 @@ export interface AgentClientConfig {
   headers?: Record<string, string>;
   debug?: boolean;
 }
+
+/**
+ * Provider and Model Types
+ * Matches backend API response structure
+ */
+
+export type CostTier = 'low' | 'medium' | 'high';
+
+export interface ProviderCapabilities {
+  streaming: boolean;
+  multiTurn: boolean;
+  toolUse: boolean;
+  fileAccess: boolean;
+  customInstructions: boolean;
+  mcpSupport: boolean;
+  modelSelection: boolean;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  description: string;
+  contextWindow: number;
+  capabilities: string[];
+  isAvailable: boolean;
+  isDefault: boolean;
+  costTier?: CostTier;
+}
+
+export interface ProviderInfo {
+  type: AgentType;
+  name: string;
+  description: string;
+  isAvailable: boolean;
+  capabilities: ProviderCapabilities;
+  models: ModelInfo[];
+}
+
+export interface ProvidersResponse {
+  totalCount: number;
+  providers: ProviderInfo[];
+}

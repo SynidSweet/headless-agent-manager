@@ -5,38 +5,104 @@ import type { APIRequestContext } from '@playwright/test';
  * Provides cleanup utilities to ensure test isolation
  */
 
+// Backend API URL (different from Playwright baseURL which is frontend)
+const BACKEND_URL = 'http://localhost:3001';
+
 /**
  * Clean up all agents created during tests
  * Ensures each test starts with a clean slate
- * Also validates that the DELETE endpoint works correctly
+ *
+ * IMPROVED: Now uses database reset endpoint + verification
+ *
+ * Benefits:
+ * - Much faster (single API call vs N deletes)
+ * - Works with terminated agents (force delete)
+ * - Provides detailed error messages
+ * - Verifies cleanup succeeded
  */
-export async function cleanupAllAgents(request: APIRequestContext): Promise<void> {
-  try {
-    // Get all agents
-    const response = await request.get('/api/agents');
+export async function cleanupAllAgents(
+  request: APIRequestContext,
+  options: {
+    maxRetries?: number;
+    retryDelay?: number;
+    throwOnFailure?: boolean;
+  } = {}
+): Promise<void> {
+  const { maxRetries = 3, retryDelay = 1000, throwOnFailure = true } = options;
 
-    if (!response.ok()) {
-      console.warn('Failed to fetch agents for cleanup:', response.status());
-      return;
+  try {
+    // STEP 1: Use database reset endpoint (fastest method)
+    console.log('🧹 Resetting database...');
+    const resetResponse = await request.post(`${BACKEND_URL}/api/test/reset-database`);
+
+    if (!resetResponse.ok()) {
+      throw new Error(`Database reset failed: HTTP ${resetResponse.status()}`);
     }
 
-    const agents = await response.json();
+    const resetResult = await resetResponse.json();
+    console.log(`   Deleted ${resetResult.deletedCount} agent(s) via database reset`);
 
-    // Delete each agent with force flag (bypasses status check for testing)
-    for (const agent of agents) {
-      try {
-        await request.delete(`/api/agents/${agent.id}?force=true`);
-      } catch (err) {
-        console.warn(`Failed to delete agent ${agent.id}:`, err);
+    // STEP 2: Wait for cleanup to propagate
+    // This gives time for:
+    // 1. Database writes to complete
+    // 2. WebSocket cleanup events to emit
+    // 3. Any async cleanup to finish
+    console.log(`   ⏳ Waiting ${retryDelay}ms for cleanup to propagate...`);
+    await new Promise(resolve => setTimeout(resolve, retryDelay));
+
+    // STEP 3: Verify cleanup succeeded (with retries)
+    let attempt = 0;
+    let lastVerification: any = null;
+
+    while (attempt < maxRetries) {
+      const verifyResponse = await request.get(`${BACKEND_URL}/api/test/verify-clean-state`);
+
+      if (!verifyResponse.ok()) {
+        console.warn(`⚠️  Verification request failed: HTTP ${verifyResponse.status()}`);
+        attempt++;
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+        continue;
+      }
+
+      lastVerification = await verifyResponse.json();
+
+      if (lastVerification.isClean) {
+        console.log(`✅ Cleanup verified: Database is clean`);
+        return;
+      }
+
+      attempt++;
+      if (attempt < maxRetries) {
+        console.warn(
+          `⚠️  Cleanup incomplete (attempt ${attempt}/${maxRetries}):`,
+          lastVerification.issues
+        );
+        console.warn(`   Retrying cleanup...`);
+
+        // Retry the reset
+        await request.post(`${BACKEND_URL}/api/test/reset-database`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
 
-    if (agents.length > 0) {
-      console.log(`🧹 Cleaned up ${agents.length} agent(s)`);
+    // Verification failed after retries
+    if (lastVerification && !lastVerification.isClean) {
+      const errorMsg = `Cleanup verification failed after ${maxRetries} attempts:\n${lastVerification.issues.join('\n')}`;
+      console.error('❌', errorMsg);
+      console.error(`   Agent count: ${lastVerification.agentCount}`);
+      console.error(`   Message count: ${lastVerification.messageCount}`);
+
+      if (throwOnFailure) {
+        throw new Error(errorMsg);
+      }
     }
   } catch (error) {
-    // Don't fail tests if cleanup fails - log and continue
-    console.warn('Cleanup error:', error);
+    console.error('❌ Cleanup error:', error);
+    if (throwOnFailure) {
+      throw error;
+    }
   }
 }
 
@@ -52,7 +118,7 @@ export async function waitForAgentCompletion(
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
-    const response = await request.get(`/api/agents/${agentId}/status`);
+    const response = await request.get(`${BACKEND_URL}/api/agents/${agentId}/status`);
 
     if (response.ok()) {
       const { status } = await response.json();

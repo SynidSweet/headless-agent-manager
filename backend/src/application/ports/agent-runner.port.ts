@@ -29,12 +29,15 @@ export interface AgentResult {
 /**
  * Agent Observer
  * Observer pattern for agent events
+ *
+ * IMPORTANT: All callbacks return Promise<void> to support async operations
+ * This ensures proper sequencing of message persistence and broadcasting
  */
 export interface IAgentObserver {
-  onMessage(message: AgentMessage): void;
-  onStatusChange(status: AgentStatus): void;
-  onError(error: Error): void;
-  onComplete(result: AgentResult): void;
+  onMessage(message: AgentMessage): Promise<void>;
+  onStatusChange(status: AgentStatus): Promise<void>;
+  onError(error: Error): Promise<void>;
+  onComplete(result: AgentResult): Promise<void>;
 }
 
 /**

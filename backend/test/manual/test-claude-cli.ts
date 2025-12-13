@@ -36,7 +36,7 @@ async function main(): Promise<void> {
 
   // Create observer
   const observer: IAgentObserver = {
-    onMessage: (message) => {
+    onMessage: async (message) => {
       messageCount++;
       console.log(`\n[Message ${messageCount}] Type: ${message.type}`);
       if (message.role) {
@@ -49,13 +49,13 @@ async function main(): Promise<void> {
         console.log(`   Subtype: ${message.metadata.subtype}`);
       }
     },
-    onStatusChange: (status) => {
+    onStatusChange: async (status) => {
       console.log(`\n📊 Status Changed: ${status}`);
     },
-    onError: (error) => {
+    onError: async (error) => {
       console.error(`\n❌ Error: ${error.message}`);
     },
-    onComplete: (result) => {
+    onComplete: async (result) => {
       console.log(`\n✅ Completed!`);
       console.log(`   Status: ${result.status}`);
       console.log(`   Duration: ${result.duration}ms`);

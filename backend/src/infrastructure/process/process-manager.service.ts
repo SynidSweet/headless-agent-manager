@@ -15,9 +15,14 @@ export class ProcessManager implements IProcessManager {
    * Spawn a new child process
    */
   spawn(command: string, args: string[], options?: SpawnOptions): ChildProcess {
+    // Determine if shell is needed based on command
+    // Claude CLI: May need shell for stdio handling
+    // Gemini CLI: Must NOT use shell (causes quote escaping issues)
+    const needsShell = options?.shell ?? false;
+
     const process = spawn(command, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: true, // CRITICAL: Claude CLI requires shell for stdio
+      shell: needsShell,
       cwd: options?.cwd,
       env: options?.env,
     });

@@ -10,9 +10,12 @@ import {
   HttpStatus,
   BadRequestException,
   NotFoundException,
+  Inject,
+  Logger,
 } from '@nestjs/common';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import { AgentMessageService } from '@application/services/agent-message.service';
+import { StreamingService } from '@application/services/streaming.service';
 import { AgentGateway } from '@application/gateways/agent.gateway';
 import {
   LaunchAgentDto,
@@ -21,6 +24,7 @@ import {
   AgentMessageDto,
 } from '@application/dto';
 import { AgentId } from '@domain/value-objects/agent-id.vo';
+import { IAgentRepository } from '@application/ports/agent-repository.port';
 
 /**
  * Agent Controller
@@ -35,10 +39,14 @@ import { AgentId } from '@domain/value-objects/agent-id.vo';
  */
 @Controller('agents')
 export class AgentController {
+  private readonly logger = new Logger(AgentController.name);
+
   constructor(
     private readonly orchestrationService: AgentOrchestrationService,
     private readonly messageService: AgentMessageService,
-    private readonly gateway: AgentGateway
+    private readonly gateway: AgentGateway,
+    private readonly streamingService: StreamingService,
+    @Inject('IAgentRepository') private readonly agentRepository: IAgentRepository
   ) {}
 
   /**
@@ -194,6 +202,12 @@ export class AgentController {
    * DELETE /agents/:id?force=true (force deletes regardless of status - for testing)
    *
    * Event-Driven: Emits 'agent:deleted' to all connected WebSocket clients
+   *
+   * Complete cleanup procedure:
+   * 1. Terminate the agent (stop CLI process)
+   * 2. Clean up all subscriptions (remove all clients)
+   * 3. Clean up WebSocket rooms (remove all sockets)
+   * 4. Broadcast deletion event
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -204,9 +218,16 @@ export class AgentController {
       if (force === 'true') {
         // Force mode - for testing: silently succeed even if agent already completed
         try {
+          // 1. Terminate agent
           await this.orchestrationService.terminateAgent(agentId);
 
-          // EVENT-DRIVEN: Broadcast deletion (even in force mode)
+          // 2. Clean up subscriptions (removes all clients from this agent)
+          this.streamingService.unsubscribeAllForAgent(agentId);
+
+          // 3. Clean up WebSocket rooms (removes all sockets from agent's room)
+          await this.gateway.cleanupAgentRooms(agentId);
+
+          // 4. EVENT-DRIVEN: Broadcast deletion (even in force mode)
           this.gateway.emitToAll('agent:deleted', {
             agentId: id,
             timestamp: new Date().toISOString(),
@@ -217,9 +238,16 @@ export class AgentController {
         }
       } else {
         // Normal terminate (requires running status)
+        // 1. Terminate agent
         await this.orchestrationService.terminateAgent(agentId);
 
-        // EVENT-DRIVEN: Broadcast deletion
+        // 2. Clean up subscriptions
+        this.streamingService.unsubscribeAllForAgent(agentId);
+
+        // 3. Clean up WebSocket rooms
+        await this.gateway.cleanupAgentRooms(agentId);
+
+        // 4. EVENT-DRIVEN: Broadcast deletion
         this.gateway.emitToAll('agent:deleted', {
           agentId: id,
           timestamp: new Date().toISOString(),
@@ -263,5 +291,56 @@ export class AgentController {
   @HttpCode(HttpStatus.NO_CONTENT)
   cancelQueuedRequest(@Param('requestId') requestId: string): void {
     this.orchestrationService.cancelLaunchRequest(requestId);
+  }
+
+  /**
+   * Delete an agent from the database
+   * DELETE /agents/:id/delete?force=true
+   *
+   * This is separate from terminateAgent (which stops the process).
+   * This method removes the agent record from the database.
+   *
+   * Safety rules:
+   * - Without force: Only allows deletion of completed/terminated/failed agents
+   * - With force=true: Attempts to terminate first, then deletes regardless of status
+   *
+   * Use force=true for test cleanup or emergency deletion.
+   */
+  @Delete(':id/delete')
+  async deleteAgent(
+    @Param('id') id: string,
+    @Query('force') force?: string
+  ): Promise<{ success: boolean }> {
+    const agentId = AgentId.fromString(id);
+    const agent = await this.agentRepository.findById(agentId);
+
+    if (!agent) {
+      throw new NotFoundException(`Agent ${id} not found`);
+    }
+
+    // FORCE DELETE: Skip all checks and attempt termination
+    if (force === 'true') {
+      this.logger.log(`Force deleting agent ${id} (status: ${agent.status.toString()})`);
+
+      try {
+        // Try to terminate if running, but ignore errors
+        await this.orchestrationService.terminateAgent(agentId);
+      } catch (error) {
+        // Ignore termination errors for force delete
+        this.logger.warn(`Termination failed during force delete (ignored): ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+
+      // Always delete from database
+      await this.agentRepository.delete(agentId);
+      return { success: true };
+    }
+
+    // NORMAL DELETION: Enforce safety checks
+    if (agent.status.toString() === 'running') {
+      throw new BadRequestException('Cannot delete running agent. Stop it first or use force=true.');
+    }
+
+    await this.agentRepository.delete(agentId);
+    return { success: true };
   }
 }

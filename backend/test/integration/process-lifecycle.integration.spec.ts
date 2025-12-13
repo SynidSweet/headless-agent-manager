@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ApplicationLifecycleService } from '@application/services/application-lifecycle.service';
 import { AgentOrchestrationService } from '@application/services/agent-orchestration.service';
 import { DatabaseService } from '@infrastructure/database/database.service';
@@ -41,6 +42,7 @@ describe('Process Lifecycle Integration Tests', () => {
   let fileSystem: FileSystemService;
   let processUtils: ProcessUtils;
   let logger: Logger;
+  let configService: ConfigService;
 
   // Unique test PID file path to avoid conflicts
   const testPidPath = path.join(__dirname, '../../data/test-process-lifecycle.pid');
@@ -62,7 +64,9 @@ describe('Process Lifecycle Integration Tests', () => {
     database = new DatabaseService(':memory:');
     database.onModuleInit(); // Initialize schema
 
-    lockManager = new PidFileProcessManager(testPidPath, fileSystem, processUtils, logger);
+    configService = { get: jest.fn().mockReturnValue('3000') } as any;
+
+    lockManager = new PidFileProcessManager(testPidPath, fileSystem, processUtils, logger, configService);
 
     // Note: AgentOrchestrationService has complex dependencies
     // We'll mock it for integration tests focused on lifecycle
@@ -279,7 +283,8 @@ describe('Process Lifecycle Integration Tests', () => {
           nestedPath,
           fileSystem,
           processUtils,
-          logger
+          logger,
+          configService
         );
 
         const nestedLifecycle = new ApplicationLifecycleService(

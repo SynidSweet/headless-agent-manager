@@ -8,30 +8,40 @@ import { createAgentClient } from '@headless-agent-manager/client';
 /**
  * Determine API and WebSocket URLs at runtime
  * This allows the same build to work in development and production
+ *
+ * Priority:
+ * 1. Runtime hostname detection (if accessed via public domain)
+ * 2. Environment variables (for E2E tests)
+ * 3. Localhost defaults (for local development)
  */
 const getUrls = () => {
-  // Check if explicitly set via environment variables (build time)
-  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_WS_URL) {
-    return {
-      apiUrl: import.meta.env.VITE_API_URL,
-      wsUrl: import.meta.env.VITE_WS_URL,
-    };
-  }
-
-  // Runtime detection based on hostname
-  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    // Production: use same origin
-    const origin = window.location.origin; // e.g., https://agents.petter.ai
+  // PRIORITY 1: Runtime detection based on hostname
+  // If accessed via public domain (not localhost), use same origin
+  // This allows dev server to work when accessed through agents.dev.petter.ai
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    const origin = window.location.origin; // e.g., https://agents.dev.petter.ai
+    console.log('[Store] Using same-origin URLs (public domain access):', { hostname: window.location.hostname, origin });
     return {
       apiUrl: origin,
       wsUrl: origin,
     };
   }
 
-  // Development: use localhost
+  // PRIORITY 2: Environment variables (for E2E tests or explicit override)
+  // Only use these when accessed via localhost
+  if (import.meta.env.VITE_API_URL && import.meta.env.VITE_WS_URL) {
+    console.log('[Store] Using environment variable URLs (localhost access)');
+    return {
+      apiUrl: import.meta.env.VITE_API_URL,
+      wsUrl: import.meta.env.VITE_WS_URL,
+    };
+  }
+
+  // PRIORITY 3: Default localhost URLs
+  console.log('[Store] Using default localhost URLs');
   return {
-    apiUrl: 'http://localhost:3000',
-    wsUrl: 'http://localhost:3000',
+    apiUrl: 'http://localhost:3001',
+    wsUrl: 'http://localhost:3001',
   };
 };
 

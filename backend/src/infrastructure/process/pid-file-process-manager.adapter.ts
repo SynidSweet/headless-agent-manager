@@ -26,6 +26,7 @@ import { ProcessLock } from '@domain/value-objects/process-lock.vo';
 import { IFileSystem } from '@application/ports/filesystem.port';
 import { ProcessUtils } from './process.utils';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class PidFileProcessManager implements IInstanceLockManager {
@@ -33,7 +34,8 @@ export class PidFileProcessManager implements IInstanceLockManager {
     @Inject('PID_FILE_PATH') private readonly pidFilePath: string,
     @Inject('IFileSystem') private readonly fileSystem: IFileSystem,
     private readonly processUtils: ProcessUtils,
-    @Inject('ILogger') private readonly logger: Logger
+    @Inject('ILogger') private readonly logger: Logger,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -71,10 +73,12 @@ export class PidFileProcessManager implements IInstanceLockManager {
    * Acquire the instance lock
    */
   async acquireLock(): Promise<ProcessLock> {
+    const port = parseInt(this.configService.get<string>('PORT') || '3000', 10);
+
     const lock = ProcessLock.create({
       pid: process.pid,
       startedAt: new Date(),
-      port: 3000, // TODO: Get from configuration
+      port,
       nodeVersion: process.version,
       instanceId: `instance-${process.pid}-${Date.now()}`,
     });

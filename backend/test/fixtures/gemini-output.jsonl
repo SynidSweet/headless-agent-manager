@@ -1,0 +1,7 @@
+Both GOOGLE_API_KEY and GEMINI_API_KEY are set. Using GOOGLE_API_KEY.
+{"type":"init","timestamp":"2025-12-02T22:31:40.995Z","session_id":"5bafab79-241e-4f9a-95f8-05722ffd6688","model":"auto"}
+{"type":"message","timestamp":"2025-12-02T22:31:40.996Z","role":"user","content":"Explain TypeScript in one sentence."}
+{"type":"message","timestamp":"2025-12-02T22:31:44.781Z","role":"assistant","content":"TypeScript is a supers","delta":true}
+{"type":"message","timestamp":"2025-12-02T22:31:44.783Z","role":"assistant","content":"et of JavaScript that adds optional static typing and class-based object-oriented programming to","delta":true}
+{"type":"message","timestamp":"2025-12-02T22:31:44.784Z","role":"assistant","content":" the language.","delta":true}
+{"type":"result","timestamp":"2025-12-02T22:31:44.789Z","status":"success","stats":{"total_tokens":12601,"input_tokens":12484,"output_tokens":71,"duration_ms":3794,"tool_calls":0}}

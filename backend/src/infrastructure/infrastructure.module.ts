@@ -1,8 +1,10 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ProcessManager } from './process/process-manager.service';
+import { IProcessManager } from '@application/ports/process-manager.port';
 import { ClaudeSDKAdapter } from './adapters/claude-sdk.adapter';
 import { ClaudePythonProxyAdapter } from './adapters/claude-python-proxy.adapter';
+import { GeminiCLIAdapter } from './adapters/gemini-cli.adapter';
 import { SyntheticAgentAdapter } from './adapters/synthetic-agent.adapter';
 import { AgentFactoryAdapter } from './adapters/agent-factory.adapter';
 import { InMemoryAgentRepository } from './repositories/in-memory-agent.repository';
@@ -14,6 +16,8 @@ import { ProcessUtils } from './process/process.utils';
 import { PidFileProcessManager } from './process/pid-file-process-manager.adapter';
 import { InMemoryAgentLaunchQueue } from './queue/in-memory-agent-launch-queue.adapter';
 import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruction-handler.adapter';
+import { GeminiMessageParser } from './parsers/gemini-message.parser';
+import { StaticProviderRegistry } from './registries/static-provider.registry';
 
 /**
  * Infrastructure Module
@@ -26,7 +30,13 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
  */
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({
+      envFilePath: [
+        `.env.${process.env.NODE_ENV || 'development'}`,
+        '.env'
+      ],
+      isGlobal: true,
+    }),
     forwardRef(() => {
       // Lazy import to avoid circular dependency at module initialization
       const { ApplicationModule } = require('../application/application.module');
@@ -44,9 +54,11 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
     // Process Management
     {
       provide: 'IProcessManager',
-      useClass: ProcessManager,
+      useFactory: (logger: ConsoleLogger) => {
+        return new ProcessManager(logger);
+      },
+      inject: [ConsoleLogger],
     },
-    ProcessManager,
 
     // File system abstraction
     FileSystemService,
@@ -91,12 +103,25 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
       inject: [ConsoleLogger, ConfigService],
     },
 
+    // Gemini Message Parser
+    GeminiMessageParser,
+
+    // Gemini CLI Adapter
+    {
+      provide: GeminiCLIAdapter,
+      useFactory: (processManager: IProcessManager, logger: ConsoleLogger, parser: GeminiMessageParser) => {
+        return new GeminiCLIAdapter(processManager, logger, parser);
+      },
+      inject: ['IProcessManager', ConsoleLogger, GeminiMessageParser],
+    },
+
     // Agent Factory (configurable via CLAUDE_ADAPTER env var)
     {
       provide: 'IAgentFactory',
       useFactory: (
         sdkAdapter: ClaudeSDKAdapter,
         proxyAdapter: ClaudePythonProxyAdapter,
+        geminiAdapter: GeminiCLIAdapter,
         config: ConfigService,
         logger: ConsoleLogger
       ) => {
@@ -107,18 +132,18 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
         switch (adapterType) {
           case 'sdk':
             logger.info('Using ClaudeSDKAdapter (requires API key)');
-            return new AgentFactoryAdapter(sdkAdapter);
+            return new AgentFactoryAdapter(sdkAdapter, geminiAdapter);
 
           case 'python-proxy':
             logger.info('Using ClaudePythonProxyAdapter (uses Max subscription)');
-            return new AgentFactoryAdapter(proxyAdapter);
+            return new AgentFactoryAdapter(proxyAdapter, geminiAdapter);
 
           default:
             logger.warn(`Unknown adapter type: ${adapterType}, defaulting to python-proxy`);
-            return new AgentFactoryAdapter(proxyAdapter);
+            return new AgentFactoryAdapter(proxyAdapter, geminiAdapter);
         }
       },
-      inject: [ClaudeSDKAdapter, ClaudePythonProxyAdapter, ConfigService, ConsoleLogger],
+      inject: [ClaudeSDKAdapter, ClaudePythonProxyAdapter, GeminiCLIAdapter, ConfigService, ConsoleLogger],
     },
     AgentFactoryAdapter,
 
@@ -180,6 +205,13 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
       useClass: ClaudeInstructionHandler,
     },
 
+    // Provider Registry (for provider information)
+    StaticProviderRegistry,
+    {
+      provide: 'IProviderRegistry',
+      useClass: StaticProviderRegistry,
+    },
+
     // Agent Launch Queue (for serialized agent launches)
     // NOTE: Circular dependency with AgentOrchestrationService
     // Queue needs orchestration service to call launchAgentDirect
@@ -199,11 +231,12 @@ import { ClaudeInstructionHandler } from './instruction-handlers/claude-instruct
     'IFileSystem',
     'IInstanceLockManager',
     'IInstructionHandler',
+    'IProviderRegistry',
     'IAgentLaunchQueue',
     ClaudeSDKAdapter,
     ClaudePythonProxyAdapter,
+    GeminiCLIAdapter,
     SyntheticAgentAdapter,
-    ProcessManager,
     DatabaseService,
   ],
 })

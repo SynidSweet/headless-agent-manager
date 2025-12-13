@@ -10,56 +10,125 @@ import {
   createErrorSchedule,
 } from '../helpers/syntheticAgent';
 import { selectAgentAndSubscribe } from '../helpers/subscriptionHelpers';
+import { cleanupAllAgents } from '../helpers/cleanup';
+import {
+  TestContext,
+  verifyTestIsolation,
+  logIsolationStatus,
+} from '../helpers/testIsolation';
 
-const BACKEND_URL = 'http://localhost:3000';
+const BACKEND_URL = 'http://localhost:3001';
 const FRONTEND_URL = 'http://localhost:5173';
 
 /**
- * Synthetic Agent Edge Case Tests
+ * Synthetic Agent Edge Case Tests (WITH ISOLATION GUARDS)
+ *
+ * This is an ENHANCED version with comprehensive test isolation:
+ * 1. Pre-test verification (ensures clean state)
+ * 2. Test context tracking (knows which agents belong to which test)
+ * 3. Event filtering (only receives events from OUR agents)
+ * 4. Fail-fast detection (immediately fails if isolation violated)
+ * 5. Post-test cleanup verification (ensures cleanup completed)
  *
  * These tests verify edge cases using synthetic agents:
  * 7. Gap detection and backfill (message sequence gaps)
  * 8. Error scenarios (agent failures, error events)
+ * Bonus: Adapter verification
  *
- * Synthetic agents enable fast, deterministic testing of edge cases
+ * CRITICAL: Tests MUST NOT receive events from other tests' agents
  */
 
-test.describe('Synthetic Agent Edge Cases', () => {
+test.describe('Synthetic Agent Edge Cases (Isolated)', () => {
   test.beforeEach(async ({ page, request }) => {
-    // Reset database for test isolation
-    await request.post(`${BACKEND_URL}/api/test/reset-database`);
+    console.log('\n🔧 Setting up test environment...');
 
-    // Navigate to app
+    // STEP 1: Reset database for test isolation
+    await request.post(`${BACKEND_URL}/api/test/reset-database`);
+    console.log('   ✅ Database reset');
+
+    // STEP 2: Navigate to app (fresh page load clears Redux state)
     await page.goto(FRONTEND_URL);
 
-    // Wait for app to load (h1 element appears)
-    await expect(page.locator('h1')).toContainText('Headless AI Agent', { timeout: 10000 });
+    // STEP 3: Wait for app to load
+    await expect(page.locator('h1')).toContainText('CodeStream', { timeout: 15000 });
+    console.log('   ✅ App loaded');
 
-    // Now check WebSocket connection (should be connected after app loads)
+    // STEP 4: Verify WebSocket connected
     const wsStatus = await getWebSocketStatus(page);
     expect(wsStatus.connected).toBe(true);
-    console.log('✅ WebSocket connected:', wsStatus.id);
+    console.log('   ✅ WebSocket connected:', wsStatus.id);
+
+    // STEP 5: Clear Redux state manually (workaround for state persistence between tests)
+    await page.evaluate(() => {
+      const store = (window as any).store;
+      if (store) {
+        const state = store.getState();
+        // Remove all agents from Redux state
+        const allAgentIds = state.agents?.allIds || [];
+        allAgentIds.forEach((agentId: string) => {
+          store.dispatch({ type: 'agents/agentRemoved', payload: agentId });
+        });
+
+        // Also clear messages
+        const messageAgentIds = Object.keys(state.messages?.byAgentId || {});
+        messageAgentIds.forEach((agentId: string) => {
+          store.dispatch({ type: 'messages/clearAgentMessages', payload: agentId });
+        });
+      }
+    });
+    console.log('   ✅ Redux state cleared');
+
+    // STEP 6: CRITICAL - Verify test isolation
+    await verifyTestIsolation(request, page);
+    console.log('   ✅ Test isolation verified\n');
   });
 
-  test('Test 7: detects message gaps and backfills', async ({ page, request }) => {
-    console.log('\n🧪 Test 7: Gap Detection and Backfill');
+  test.afterEach(async ({ page, request }) => {
+    console.log('\n🧹 Cleaning up after test...');
 
-    // Set up listener FIRST
-    const createdPromise = waitForWebSocketEvent(page, 'agent:created');
+    // CRITICAL: Ensure clean state for next test
+    try {
+      await cleanupAllAgents(request, { maxRetries: 3, retryDelay: 1000, throwOnFailure: true });
+      console.log('   ✅ Cleanup completed\n');
+    } catch (error) {
+      console.error('   ❌ Cleanup failed:', error);
+      // Log diagnostic info
+      await logIsolationStatus(request, page);
+      throw error; // Fail the test - don't let next test run with dirty state
+    }
+  });
+
+  test('Test 7: detects message gaps and backfills (ISOLATED)', async ({ page, request }) => {
+    // Create test context
+    const context = new TestContext('Test 7: Gap Detection and Backfill');
+
+    console.log('🧪 Starting isolated test...\n');
+
+    // Log initial state
+    await logIsolationStatus(request, page, context);
+
+    // Set up listener FIRST (before launching agent to avoid race condition)
+    const createdPromise = waitForWebSocketEvent(page, 'agent:created', {
+      timeout: 15000,
+    });
 
     // Launch synthetic agent with gap schedule
-    await launchSyntheticAgent(
+    const agentId = await launchSyntheticAgent(
       BACKEND_URL,
       createGapSchedule(),
-      'Test 7: Gap detection'
+      'Test 7: Gap detection (isolated)'
     );
 
-    // Wait for agent:created
-    const createdEvent = await createdPromise;
-    const agentId = createdEvent.agent.id;
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
 
-    console.log('🚀 Synthetic agent created with gap schedule:', agentId);
-    console.log('✅ agent:created received');
+    // Wait for agent:created event
+    const createdEvent = await createdPromise;
+
+    // CRITICAL: Verify event is from OUR agent
+    expect(createdEvent.agent.id).toBe(agentId);
+    console.log('✅ agent:created received from our agent');
 
     // Select agent AND subscribe
     await selectAgentAndSubscribe(page, agentId);
@@ -68,11 +137,19 @@ test.describe('Synthetic Agent Edge Cases', () => {
     // Gap schedule sends: Message 1, Message 2, [gap], Message 4
     console.log('⏳ Waiting for messages (including gap)...');
 
-    await waitForNthWebSocketEvent(page, 'agent:message', 3, {
-      timeout: 10000,
-    });
+    // CRITICAL: Collect messages with agentId filtering to avoid contamination
+    const messages: any[] = [];
+    for (let i = 0; i < 3; i++) {
+      const msg = await waitForWebSocketEvent(page, 'agent:message', {
+        agentId, // CRITICAL: Only accept messages from OUR agent
+        timeout: 10000,
+      });
+      expect(msg.agentId).toBe(agentId); // Double-check filtering
+      messages.push(msg);
+      console.log(`   ✅ Message ${i + 1} received (seq: ${msg.message.sequenceNumber})`);
+    }
 
-    console.log('✅ Received 3 messages');
+    console.log(`✅ Received ${messages.length} messages from our agent`);
 
     // Check Redux state for gaps (exposed on window)
     const gapInfo = await page.evaluate((id) => {
@@ -155,9 +232,13 @@ test.describe('Synthetic Agent Edge Cases', () => {
     }
 
     // Wait for completion
-    await waitForWebSocketEvent(page, 'agent:complete', { timeout: 5000 });
+    const completion = await waitForWebSocketEvent(page, 'agent:complete', {
+      agentId, // CRITICAL: Only accept completion from OUR agent
+      timeout: 5000,
+    });
 
-    console.log('✅ Agent completed');
+    expect(completion.agentId).toBe(agentId);
+    console.log('✅ Agent completed (our agent)');
 
     // Verify all messages eventually in database
     const messagesResponse = await request.get(
@@ -169,37 +250,56 @@ test.describe('Synthetic Agent Edge Cases', () => {
 
     console.log('✅ Test 7 PASSED: Gap detection tested');
     console.log('   Note: Gap backfill behavior depends on useAgentMessages hook logic');
+
+    // Log final state
+    await logIsolationStatus(request, page, context);
+
+    context.complete();
   });
 
-  test('Test 8: handles agent errors gracefully', async ({ page }) => {
-    console.log('\n🧪 Test 8: Error Scenarios');
+  test('Test 8: handles agent errors gracefully (ISOLATED)', async ({ page, request }) => {
+    // Create test context
+    const context = new TestContext('Test 8: Error Scenarios');
 
-    // Set up listener FIRST
-    const createdPromise = waitForWebSocketEvent(page, 'agent:created');
+    console.log('🧪 Starting isolated test...\n');
+
+    // Log initial state
+    await logIsolationStatus(request, page, context);
+
+    // Set up listener FIRST (before launching agent to avoid race condition)
+    const createdPromise = waitForWebSocketEvent(page, 'agent:created', {
+      timeout: 15000,
+    });
 
     // Launch synthetic agent with error schedule
-    await launchSyntheticAgent(
+    const agentId = await launchSyntheticAgent(
       BACKEND_URL,
       createErrorSchedule(),
-      'Test 8: Error handling'
+      'Test 8: Error handling (isolated)'
     );
 
-    // Wait for agent:created
-    const createdEvent = await createdPromise;
-    const agentId = createdEvent.agent.id;
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
 
-    console.log('🚀 Synthetic agent created with error schedule:', agentId);
-    console.log('✅ agent:created received');
+    // Wait for agent:created event
+    const createdEvent = await createdPromise;
+
+    // CRITICAL: Verify event is from OUR agent
+    expect(createdEvent.agent.id).toBe(agentId);
+    console.log('✅ agent:created received from our agent');
 
     // Select agent AND subscribe
     await selectAgentAndSubscribe(page, agentId);
 
     // Wait for initial message (already subscribed)
     const msg1 = await waitForWebSocketEvent(page, 'agent:message', {
+      agentId, // CRITICAL: Only accept messages from OUR agent
       timeout: 3000,
     });
 
-    console.log('✅ Initial message received:', msg1.message.content);
+    expect(msg1.agentId).toBe(agentId); // Double-check filtering
+    console.log('✅ Initial message received from our agent:', msg1.message.content);
 
     // Wait for error event (if backend emits it)
     // Note: This depends on backend implementation
@@ -207,10 +307,12 @@ test.describe('Synthetic Agent Edge Cases', () => {
       console.log('⏳ Waiting for error event...');
 
       const errorEvent = await waitForWebSocketEvent(page, 'agent:error', {
+        agentId, // CRITICAL: Only accept errors from OUR agent
         timeout: 5000,
       });
 
-      console.log('✅ Error event received:', errorEvent.error);
+      expect(errorEvent.agentId).toBe(agentId);
+      console.log('✅ Error event received from our agent:', errorEvent.error);
       expect(errorEvent.error).toBeDefined();
     } catch (err) {
       console.log('ℹ️  No agent:error event (may not be implemented yet)');
@@ -219,10 +321,12 @@ test.describe('Synthetic Agent Edge Cases', () => {
 
     // Agent should complete (with failure status or as completed)
     const completion = await waitForWebSocketEvent(page, 'agent:complete', {
+      agentId, // CRITICAL: Only accept completion from OUR agent
       timeout: 5000,
     });
 
-    console.log('✅ Agent completed:', completion);
+    expect(completion.agentId).toBe(agentId);
+    console.log('✅ Agent completed (our agent):', completion);
 
     // Result should be defined
     expect(completion).toBeDefined();
@@ -234,20 +338,33 @@ test.describe('Synthetic Agent Edge Cases', () => {
     console.log('✅ UI still responsive after error');
 
     // Verify error message visible in UI (if backend sends it as message)
-    const messages = await page.locator('[data-message-type]').allTextContents();
+    const messages = await page.locator('[data-message-id]').allTextContents();
     console.log(`✅ UI shows ${messages.length} messages`);
 
     console.log('✅ Test 8 PASSED: Error scenario handled gracefully');
+
+    // Log final state
+    await logIsolationStatus(request, page, context);
+
+    context.complete();
   });
 
-  test('Test Bonus: verify synthetic agent adapter configuration', async ({ page, request }) => {
-    console.log('\n🧪 Bonus: Synthetic Agent Adapter Verification');
+  test('Test Bonus: verify synthetic agent adapter configuration (ISOLATED)', async ({ page, request }) => {
+    // Create test context
+    const context = new TestContext('Test Bonus: Adapter Verification');
 
-    // Set up listener FIRST
-    const createdPromise = waitForWebSocketEvent(page, 'agent:created');
+    console.log('🧪 Starting isolated test...\n');
+
+    // Log initial state
+    await logIsolationStatus(request, page, context);
+
+    // Set up listener FIRST (before launching agent to avoid race condition)
+    const createdPromise = waitForWebSocketEvent(page, 'agent:created', {
+      timeout: 15000,
+    });
 
     // Launch synthetic agent with custom schedule
-    await launchSyntheticAgent(
+    const agentId = await launchSyntheticAgent(
       BACKEND_URL,
       [
         { delay: 100, type: 'message', data: { content: 'Quick message 1' } },
@@ -255,36 +372,49 @@ test.describe('Synthetic Agent Edge Cases', () => {
         { delay: 300, type: 'message', data: { content: 'Quick message 3' } },
         { delay: 400, type: 'complete', data: { success: true } },
       ],
-      'Adapter verification test'
+      'Adapter verification (isolated)'
     );
 
-    // Wait for agent:created
+    // Register agent with test context
+    context.registerAgent(agentId);
+    console.log('🚀 Synthetic agent launched and registered:', agentId);
+
+    // Wait for agent:created event
     const createdEvent = await createdPromise;
-    const agentId = createdEvent.agent.id;
 
-    console.log('🚀 Synthetic agent created:', agentId);
-
-    // Verify it's a synthetic type
+    // CRITICAL: Verify event is from OUR agent
+    expect(createdEvent.agent.id).toBe(agentId);
     expect(createdEvent.agent.type).toBe('synthetic');
-    console.log('✅ Agent type is synthetic');
+    console.log('✅ agent:created received from our agent - type is synthetic');
 
     // Subscribe to receive messages
     await selectAgentAndSubscribe(page, agentId);
 
     // Verify rapid message delivery (all within 500ms)
+    // CRITICAL: Collect messages with agentId filtering
     const start = Date.now();
-    await waitForNthWebSocketEvent(page, 'agent:message', 3, {
-      timeout: 2000,
-    });
+    const messages: any[] = [];
+    for (let i = 0; i < 3; i++) {
+      const msg = await waitForWebSocketEvent(page, 'agent:message', {
+        agentId, // CRITICAL: Only accept messages from OUR agent
+        timeout: 2000,
+      });
+      expect(msg.agentId).toBe(agentId); // Double-check filtering
+      messages.push(msg);
+    }
     const elapsed = Date.now() - start;
 
-    console.log(`✅ Received 3 messages in ${elapsed}ms`);
+    console.log(`✅ Received ${messages.length} messages from our agent in ${elapsed}ms`);
     expect(elapsed).toBeLessThan(1000); // Should complete in under 1 second
 
     // Wait for completion
-    await waitForWebSocketEvent(page, 'agent:complete', { timeout: 2000 });
+    const completion = await waitForWebSocketEvent(page, 'agent:complete', {
+      agentId, // CRITICAL: Only accept completion from OUR agent
+      timeout: 2000,
+    });
 
-    console.log('✅ Agent completed rapidly');
+    expect(completion.agentId).toBe(agentId);
+    console.log('✅ Agent completed rapidly (our agent)');
 
     // Verify in database
     const dbResponse = await request.get(`${BACKEND_URL}/api/agents/${agentId}`);
@@ -295,5 +425,10 @@ test.describe('Synthetic Agent Edge Cases', () => {
 
     console.log('✅ Database confirms synthetic agent');
     console.log('✅ Bonus Test PASSED: Synthetic adapter working correctly!');
+
+    // Log final state
+    await logIsolationStatus(request, page, context);
+
+    context.complete();
   });
 });

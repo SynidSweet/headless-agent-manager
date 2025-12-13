@@ -6,8 +6,13 @@
 import type { AgentMessage } from '../types';
 
 /**
- * Aggregates streaming content_delta tokens into complete messages
+ * Aggregates streaming delta tokens into complete messages
  * This provides the "typing" effect in the UI
+ *
+ * MULTI-PROVIDER SUPPORT:
+ * Supports both Claude and Gemini CLI delta streaming formats:
+ * - Claude: metadata.eventType = 'content_delta'
+ * - Gemini: metadata.delta = true
  *
  * DEDUPLICATION FIX:
  * Claude CLI sends BOTH streaming tokens (content_delta) AND a complete message.
@@ -17,7 +22,7 @@ import type { AgentMessage } from '../types';
  * @param messages - Raw messages from backend (includes individual tokens)
  * @returns Aggregated messages with tokens combined and duplicates removed
  *
- * @example
+ * @example Claude
  * ```typescript
  * const messages = [
  *   { content: 'Hello', metadata: { eventType: 'content_delta' } },
@@ -27,6 +32,17 @@ import type { AgentMessage } from '../types';
  *
  * const result = aggregateStreamingTokens(messages);
  * // Returns: [{ content: 'Hello world', metadata: { aggregated: true } }]
+ * ```
+ *
+ * @example Gemini
+ * ```typescript
+ * const messages = [
+ *   { content: 'TypeScript', metadata: { delta: true } },
+ *   { content: ' is great', metadata: { delta: true } },
+ * ];
+ *
+ * const result = aggregateStreamingTokens(messages);
+ * // Returns: [{ content: 'TypeScript is great', metadata: { aggregated: true } }]
  * ```
  */
 export function aggregateStreamingTokens(messages: AgentMessage[]): AgentMessage[] {
@@ -39,10 +55,16 @@ export function aggregateStreamingTokens(messages: AgentMessage[]): AgentMessage
   let currentBufferStartMsg: AgentMessage | null = null;
 
   for (const msg of messages) {
-    // Check if this is a streaming token
-    const isStreamingToken =
+    // Check if this is a streaming token (supports both Claude and Gemini formats)
+    const isClaudeDelta =
       msg.type === 'assistant' &&
       msg.metadata?.eventType === 'content_delta';
+
+    const isGeminiDelta =
+      msg.type === 'assistant' &&
+      msg.metadata?.delta === true;
+
+    const isStreamingToken = isClaudeDelta || isGeminiDelta;
 
     if (isStreamingToken) {
       // Accumulate token into buffer

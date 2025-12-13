@@ -7,8 +7,9 @@ import { configureStore } from '@reduxjs/toolkit';
 import { agentsSlice } from '../store/slices/agentsSlice';
 import { messagesSlice } from '../store/slices/messagesSlice';
 import { connectionSlice } from '../store/slices/connectionSlice';
+import { providersSlice } from '../store/slices/providersSlice';
 import type { RootState } from '../store/selectors';
-import type { Agent, AgentMessage } from '../types';
+import type { Agent, AgentMessage, ProviderInfo } from '../types';
 
 /**
  * Create a mock Redux store for testing
@@ -19,6 +20,7 @@ export function createMockStore(preloadedState?: any) {
     agents: agentsSlice.reducer,
     messages: messagesSlice.reducer,
     connection: connectionSlice.reducer,
+    providers: providersSlice.reducer,
   };
 
   return configureStore({
@@ -183,6 +185,87 @@ export function createMockAgent(overrides: Partial<Agent> = {}): Agent {
 export function createMockMessage(overrides: Partial<AgentMessage> = {}): AgentMessage {
   return {
     ...mockMessageFixtures.assistant,
+    ...overrides,
+  };
+}
+
+/**
+ * Mock provider fixtures for testing
+ */
+export const mockProviderFixtures = {
+  claudeCode: {
+    type: 'claude-code',
+    name: 'Claude Code',
+    description: 'Anthropic Claude Code CLI',
+    isAvailable: true,
+    capabilities: {
+      streaming: true,
+      multiTurn: true,
+      toolUse: true,
+      fileAccess: true,
+      customInstructions: true,
+      mcpSupport: true,
+      modelSelection: true,
+    },
+    models: [
+      {
+        id: 'claude-sonnet-4-5-20250929',
+        name: 'Claude Sonnet 4.5',
+        description: 'Best for coding',
+        contextWindow: 200000,
+        capabilities: ['streaming', 'tool-use'],
+        isAvailable: true,
+        isDefault: true,
+        costTier: 'medium' as const,
+      },
+      {
+        id: 'claude-opus-4-5-20251101',
+        name: 'Claude Opus 4.5',
+        description: 'Most intelligent',
+        contextWindow: 200000,
+        capabilities: ['streaming', 'tool-use', 'vision'],
+        isAvailable: true,
+        isDefault: false,
+        costTier: 'high' as const,
+      },
+    ],
+  } as ProviderInfo,
+
+  geminiCli: {
+    type: 'gemini-cli',
+    name: 'Gemini CLI',
+    description: 'Google Gemini CLI',
+    isAvailable: false,
+    capabilities: {
+      streaming: false,
+      multiTurn: true,
+      toolUse: false,
+      fileAccess: false,
+      customInstructions: false,
+      mcpSupport: false,
+      modelSelection: true,
+    },
+    models: [
+      {
+        id: 'gemini-pro',
+        name: 'Gemini Pro',
+        description: 'Google Gemini Pro',
+        contextWindow: 32000,
+        capabilities: ['multi-turn'],
+        isAvailable: true,
+        isDefault: true,
+        costTier: 'low' as const,
+      },
+    ],
+  } as ProviderInfo,
+};
+
+/**
+ * Create a mock provider with custom properties
+ */
+export function createMockProvider(overrides: Partial<ProviderInfo> = {}): ProviderInfo {
+  return {
+    ...mockProviderFixtures.claudeCode,
     ...overrides,
   };
 }

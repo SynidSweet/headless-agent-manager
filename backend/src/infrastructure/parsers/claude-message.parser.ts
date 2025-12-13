@@ -62,6 +62,13 @@ export class ClaudeMessageParser {
             metadata: { eventType: 'content_delta' },
           };
         }
+
+        // Handle input_json_delta - streaming tool input JSON
+        // These are partial JSON chunks that build up tool arguments
+        // We return null to skip them (they don't contain displayable content)
+        if (delta.type === 'input_json_delta') {
+          return null;
+        }
       }
 
       // Handle message_delta - contains usage stats
@@ -231,6 +238,13 @@ export class ClaudeMessageParser {
       raw: line, // Store original JSON
       metadata: {},
     };
+
+    console.log(`[ClaudeMessageParser] ✅ Parsed message`, {
+      messageType: message.type,
+      role: message.role,
+      contentLength: typeof message.content === 'string' ? message.content.length : 0,
+      hasMetadata: !!message.metadata,
+    });
 
     // Add tool use blocks to metadata for detailed inspection
     if (toolUseBlocks.length > 0 && message.metadata) {

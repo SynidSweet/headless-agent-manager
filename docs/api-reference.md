@@ -14,6 +14,151 @@ This document provides complete API reference for the Headless AI Agent Manageme
 
 ## REST API Endpoints
 
+### Providers Resource
+
+#### Get Available Providers
+
+**Endpoint:** `GET /api/providers`
+
+**Description:** Retrieve all available agent providers (Claude Code, Gemini CLI) with their supported models and capabilities
+
+**Request Example:**
+```
+GET /api/providers
+```
+
+**Response:** `200 OK`
+```json
+{
+  "totalCount": 2,
+  "providers": [
+    {
+      "type": "claude-code",
+      "name": "Claude Code",
+      "description": "Anthropic Claude AI agent with advanced coding capabilities",
+      "isAvailable": true,
+      "capabilities": {
+        "streaming": true,
+        "multiTurn": true,
+        "toolUse": true,
+        "fileAccess": true,
+        "customInstructions": true,
+        "mcpSupport": true,
+        "modelSelection": true
+      },
+      "models": [
+        {
+          "id": "claude-sonnet-4-5-20250929",
+          "name": "Claude Sonnet 4.5",
+          "description": "Best model for complex agents and coding tasks with optimal balance of intelligence, speed, and cost",
+          "contextWindow": 200000,
+          "capabilities": ["streaming", "tool-use", "vision", "file-access", "multi-turn"],
+          "isAvailable": true,
+          "isDefault": true,
+          "costTier": "medium"
+        },
+        {
+          "id": "claude-opus-4-5-20251101",
+          "name": "Claude Opus 4.5",
+          "description": "Most intelligent model with 80.9% SWE-bench score, best for complex reasoning",
+          "contextWindow": 200000,
+          "capabilities": ["streaming", "tool-use", "vision", "file-access", "multi-turn"],
+          "isAvailable": true,
+          "isDefault": false,
+          "costTier": "high"
+        },
+        {
+          "id": "claude-haiku-4-5-20251001",
+          "name": "Claude Haiku 4.5",
+          "description": "Fastest model with near-frontier performance, optimized for high-volume tasks",
+          "contextWindow": 200000,
+          "capabilities": ["streaming", "tool-use", "vision", "file-access", "multi-turn"],
+          "isAvailable": true,
+          "isDefault": false,
+          "costTier": "low"
+        }
+      ]
+    },
+    {
+      "type": "gemini-cli",
+      "name": "Gemini CLI",
+      "description": "Google Gemini AI agent with massive context windows and multimodal capabilities",
+      "isAvailable": true,
+      "capabilities": {
+        "streaming": true,
+        "multiTurn": true,
+        "toolUse": true,
+        "fileAccess": true,
+        "customInstructions": false,
+        "mcpSupport": false,
+        "modelSelection": true
+      },
+      "models": [
+        {
+          "id": "gemini-2.5-pro",
+          "name": "Gemini 2.5 Pro",
+          "description": "Most capable Gemini model with 1M token context and adaptive thinking",
+          "contextWindow": 1000000,
+          "capabilities": ["streaming", "tool-use", "vision", "multimodal", "audio", "video"],
+          "isAvailable": true,
+          "isDefault": true,
+          "costTier": "medium"
+        },
+        {
+          "id": "gemini-2.5-flash",
+          "name": "Gemini 2.5 Flash",
+          "description": "Fast, efficient model with excellent multimodal capabilities",
+          "contextWindow": 1000000,
+          "capabilities": ["streaming", "tool-use", "vision", "multimodal", "audio", "video"],
+          "isAvailable": true,
+          "isDefault": false,
+          "costTier": "low"
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Response Fields:**
+
+**Provider Object:**
+- `type`: Provider identifier (claude-code, gemini-cli)
+- `name`: Human-readable provider name
+- `description`: Provider description
+- `isAvailable`: Whether provider is currently available
+- `capabilities`: Provider-level capabilities object
+- `models`: Array of available models
+
+**Model Object:**
+- `id`: Model identifier for API requests
+- `name`: Human-readable model name
+- `description`: Model description and use case
+- `contextWindow`: Maximum context window in tokens
+- `capabilities`: Array of model capabilities
+- `isAvailable`: Whether model is currently available
+- `isDefault`: Whether this is the default model for the provider
+- `costTier`: Cost level (low, medium, high)
+
+**Capabilities Object:**
+- `streaming`: Real-time message streaming
+- `multiTurn`: Multi-turn conversations
+- `toolUse`: Function calling and tool use
+- `fileAccess`: File system access
+- `customInstructions`: Custom system prompts
+- `mcpSupport`: Model Context Protocol support
+- `modelSelection`: Model selection at launch
+
+**Use Cases:**
+- Frontend UI: Populate provider/model selection dropdowns
+- API clients: Discover available agent types and models
+- Validation: Check if a provider/model is available before launching
+- Documentation: Auto-generate provider documentation
+
+**Performance:** Response time < 100ms (in-memory static data)
+
+---
+
 ### Agents Resource
 
 #### Create Agent (Launch)

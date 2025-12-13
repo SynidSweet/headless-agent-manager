@@ -180,10 +180,10 @@ describe('ClaudeSDKAdapter', () => {
       const agent = await adapter.start(session);
 
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       adapter.subscribe(agent.id, observer);
@@ -222,10 +222,10 @@ describe('ClaudeSDKAdapter', () => {
       const agent = await adapter.start(session);
 
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       adapter.subscribe(agent.id, observer);
@@ -256,10 +256,10 @@ describe('ClaudeSDKAdapter', () => {
       const agent = await adapter.start(session);
 
       const observer: IAgentObserver = {
-        onMessage: jest.fn(),
-        onStatusChange: jest.fn(),
-        onError: jest.fn(),
-        onComplete: jest.fn(),
+        onMessage: jest.fn().mockResolvedValue(undefined),
+        onStatusChange: jest.fn().mockResolvedValue(undefined),
+        onError: jest.fn().mockResolvedValue(undefined),
+        onComplete: jest.fn().mockResolvedValue(undefined),
       };
 
       adapter.subscribe(agent.id, observer);
