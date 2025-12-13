@@ -73,7 +73,7 @@ export function createWebSocketMiddleware(socket: Socket): Middleware {
       console.log(`[WebSocketMiddleware] 📨 agent:message received`, {
         agentId,
         messageType: message?.type,
-        contentPreview: message?.content?.substring(0, 50),
+        contentPreview: typeof message?.content === 'string' ? message.content.substring(0, 50) : '[object]',
         sequenceNumber: message?.sequenceNumber,
         timestamp: new Date().toISOString(),
       });
